@@ -174,6 +174,7 @@ export default function PlaceInspector({
   const [filesExpanded, setFilesExpanded] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [editingName, setEditingName] = useState(false)
+  const [imageViewerOpen, setImageViewerOpen] = useState(false)
   const [nameValue, setNameValue] = useState('')
   const nameInputRef = useRef(null)
   const fileInputRef = useRef(null)
@@ -374,7 +375,7 @@ export default function PlaceInspector({
             setHoursExpanded={setHoursExpanded} timeFormat={timeFormat} t={t} place={place} placeFiles={placeFiles}
             onFileUpload={onFileUpload} filesExpanded={filesExpanded} setFilesExpanded={setFilesExpanded}
             fileInputRef={fileInputRef} handleFileUpload={handleFileUpload} isUploading={isUploading}
-            distanceUnit={distanceUnit} />
+            distanceUnit={distanceUnit} onOpenImageViewer={() => setImageViewerOpen(true)} />
 
           {/* Extra native rows from placeDetailProvider plugins (#1429). */}
           {mode === 'trip' && providerDetails.length > 0 && (
@@ -457,6 +458,9 @@ export default function PlaceInspector({
               ))}
         </div>
       </div>
+      {imageViewerOpen && place.image_url && (
+        <PlaceImageViewer imageUrl={place.image_url} title={place.name} onClose={() => setImageViewerOpen(false)} />
+      )}
     </div>
   )
 }
@@ -835,7 +839,8 @@ function PlaceReservationParticipants({ selectedAssignmentId, reservations, assi
 }
 
 function PlaceExtras({ openingHours, weekdayIndex, hoursExpanded, setHoursExpanded, timeFormat, t, place,
-  placeFiles, onFileUpload, filesExpanded, setFilesExpanded, fileInputRef, handleFileUpload, isUploading, distanceUnit }: any) {
+  placeFiles, onFileUpload, filesExpanded, setFilesExpanded, fileInputRef, handleFileUpload, isUploading, distanceUnit,
+  onOpenImageViewer }: any) {
   return (
           <div className={`grid grid-cols-1 ${openingHours?.length > 0 ? 'sm:grid-cols-2' : ''} gap-2`}>
           {openingHours && openingHours.length > 0 && (
@@ -1001,6 +1006,91 @@ function PlaceExtras({ openingHours, weekdayIndex, hoursExpanded, setHoursExpand
               )}
             </div>
           )}
+
+          {place.image_url && (
+            <div className="bg-surface-hover" style={{ gridColumn: '1 / -1', borderRadius: 10, overflow: 'hidden' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px' }}>
+                <FileImage size={13} color="#9ca3af" />
+                <span className="text-content-secondary" style={{ fontSize: 'calc(12px * var(--fs-scale-body, 1))', fontWeight: 500 }}>
+                  {t('files.filterImages') || 'Images'}
+                </span>
+              </div>
+              <button
+                onClick={onOpenImageViewer}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  padding: '0 12px 12px',
+                  border: 'none',
+                  background: 'none',
+                  cursor: 'zoom-in',
+                }}
+                aria-label={place.name}
+              >
+                <img
+                  src={place.image_url}
+                  alt={place.name}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    maxHeight: 260,
+                    objectFit: 'contain',
+                    borderRadius: 8,
+                    background: 'rgba(0,0,0,0.06)',
+                  }}
+                />
+              </button>
+            </div>
+          )}
           </div>
+  )
+}
+
+function PlaceImageViewer({ imageUrl, title, onClose }: { imageUrl: string; title: string; onClose: () => void }) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [onClose])
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 2000,
+        background: 'rgba(0,0,0,0.92)',
+        display: 'flex',
+        flexDirection: 'column',
+        paddingBottom: 'var(--bottom-nav-h)',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '10px 16px', flexShrink: 0 }} onClick={e => e.stopPropagation()}>
+        <span style={{ color: 'rgba(255,255,255,0.78)', fontSize: 'calc(12px * var(--fs-scale-body, 1))', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {title}
+        </span>
+        <button
+          onClick={onClose}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.78)', display: 'flex', padding: 4, flexShrink: 0 }}
+          aria-label="Close"
+        >
+          <X size={18} />
+        </button>
+      </div>
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+        <img
+          src={imageUrl}
+          alt={title}
+          onClick={e => e.stopPropagation()}
+          style={{ display: 'block', maxWidth: '94vw', maxHeight: '82vh', objectFit: 'contain', borderRadius: 8 }}
+        />
+      </div>
+    </div>
   )
 }
