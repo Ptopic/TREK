@@ -4,11 +4,11 @@ import { openFile } from '../../utils/fileDownload'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
-import { X, Clock, MapPin, ExternalLink, Phone, Banknote, Edit2, Trash2, Plus, Minus, ChevronDown, ChevronUp, FileText, Upload, File, FileImage, Star, Navigation, Map as MapIcon, Users, Mountain, TrendingUp, Bookmark, BookmarkCheck, Copy } from 'lucide-react'
+import { X, Clock, MapPin, ExternalLink, Phone, Banknote, Edit2, Trash2, Plus, Minus, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, FileText, Upload, File, FileImage, Star, Navigation, Map as MapIcon, Users, Mountain, TrendingUp, Bookmark, BookmarkCheck, Copy } from 'lucide-react'
 import PlaceAvatar from '../shared/PlaceAvatar'
 import GuestBadge from '../shared/GuestBadge'
 import StatusBadge from '../Collections/StatusBadge'
-import { mapsApi, pluginsApi } from '../../api/client'
+import { mapsApi, placesApi, pluginsApi } from '../../api/client'
 import { collectionsApi } from '../../api/collections'
 import { useSettingsStore } from '../../store/settingsStore'
 import { useAddonStore } from '../../store/addonStore'
@@ -18,7 +18,7 @@ import { useToast } from '../shared/Toast'
 import { useTranslation, translateApiError } from '../../i18n'
 import { usePluginStore } from '../../store/pluginStore'
 import PluginFrame from '../Plugins/PluginFrame'
-import type { Place, Category, Day, Assignment, Reservation, TripFile, AssignmentsMap } from '../../types'
+import type { Place, Category, Day, Assignment, Reservation, TripFile, AssignmentsMap, PlaceImage } from '../../types'
 import type { CollectionStatus } from '@trek/shared'
 import { splitReservationDateTime, formatTime, formatMoney } from '../../utils/formatters'
 import { useTripStore } from '../../store/tripStore'
@@ -105,6 +105,13 @@ interface TripMember {
   is_guest?: boolean
 }
 
+interface GalleryImage {
+  id: string
+  src: string
+  title: string
+  customImageId?: number
+}
+
 interface PlaceInspectorProps {
   place: Place | null
   categories: Category[]
@@ -173,11 +180,15 @@ export default function PlaceInspector({
   const [hoursExpanded, setHoursExpanded] = useState(false)
   const [filesExpanded, setFilesExpanded] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
+  const [customImages, setCustomImages] = useState<PlaceImage[]>([])
+  const [isUploadingImage, setIsUploadingImage] = useState(false)
+  const [deletingImageId, setDeletingImageId] = useState<number | null>(null)
   const [editingName, setEditingName] = useState(false)
-  const [imageViewerOpen, setImageViewerOpen] = useState(false)
+  const [imageViewerIndex, setImageViewerIndex] = useState<number | null>(null)
   const [nameValue, setNameValue] = useState('')
   const nameInputRef = useRef(null)
   const fileInputRef = useRef(null)
+  const imageInputRef = useRef<HTMLInputElement | null>(null)
   const googleDetails = usePlaceDetails(place?.google_place_id, place?.osm_id, language)
 
   // Library-wide "is this place already saved anywhere I can see?" indicator for
@@ -224,14 +235,14 @@ export default function PlaceInspector({
   }, [place, openSavePicker])
 
   const startNameEdit = () => {
-    if (!onUpdatePlace) return
+    if (!onUpdatePlace || !place) return
     setNameValue(place.name || '')
     setEditingName(true)
     setTimeout(() => nameInputRef.current?.focus(), 0)
   }
 
   const commitNameEdit = () => {
-    if (!editingName) return
+    if (!editingName || !place) return
     const trimmed = nameValue.trim()
     setEditingName(false)
     if (!trimmed || trimmed === place.name) return
@@ -242,6 +253,91 @@ export default function PlaceInspector({
     if (e.key === 'Enter') { e.preventDefault(); commitNameEdit() }
     if (e.key === 'Escape') setEditingName(false)
   }
+
+  const galleryImages = useMemo<GalleryImage[]>(() => {
+    const images: GalleryImage[] = []
+    if (!place) return images
+    if (place.image_url) images.push({ id: 'cover', src: place.image_url, title: place.name })
+    for (const image of customImages) {
+      images.push({ id: `custom-${image.id}`, src: image.url, title: image.original_name || place.name, customImageId: image.id })
+    }
+    return images
+  }, [customImages, place])
+
+  useEffect(() => {
+    if (mode !== 'trip' || !place?.trip_id || !place?.id) {
+      setCustomImages([])
+      return
+    }
+    let cancelled = false
+    placesApi.listImages(place.trip_id, place.id)
+      .then(data => { if (!cancelled) setCustomImages(data.images || []) })
+      .catch(() => { if (!cancelled) setCustomImages([]) })
+    return () => { cancelled = true }
+  }, [mode, place?.trip_id, place?.id])
+
+  const handleFileUpload = useCallback(async (e) => {
+    const selectedFiles = Array.from((e.target as HTMLInputElement).files || [])
+    if (!selectedFiles.length || !onFileUpload || !place) return
+    setIsUploading(true)
+    try {
+      for (const file of selectedFiles) {
+        const fd = new FormData()
+        fd.append('file', file)
+        fd.append('place_id', String(place.id))
+        await onFileUpload(fd)
+      }
+      setFilesExpanded(true)
+    } catch (err: unknown) {
+      console.error('Upload failed', err)
+      toast.error(translateApiError(t, err, 'files.uploadError'))
+    } finally {
+      setIsUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }, [onFileUpload, place, toast, t])
+
+  const handleImageUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = Array.from(e.target.files || [])
+    if (!selectedFiles.length || mode !== 'trip' || !place?.trip_id) return
+    setIsUploadingImage(true)
+    try {
+      const uploaded: PlaceImage[] = []
+      for (const file of selectedFiles) {
+        const fd = new FormData()
+        fd.append('file', file)
+        const data = await placesApi.uploadImage(place.trip_id, place.id, fd) as { image: PlaceImage }
+        if (data.image) uploaded.push(data.image)
+      }
+      setCustomImages(prev => [...uploaded, ...prev])
+    } catch (err: unknown) {
+      console.error('Image upload failed', err)
+      toast.error(translateApiError(t, err, 'files.uploadError'))
+    } finally {
+      setIsUploadingImage(false)
+      if (imageInputRef.current) imageInputRef.current.value = ''
+    }
+  }, [mode, place, toast, t])
+
+  const handleDeleteImage = useCallback(async (imageId: number) => {
+    if (mode !== 'trip' || !place?.trip_id) return
+    if (!window.confirm(t('common.delete') + '?')) return
+    setDeletingImageId(imageId)
+    try {
+      await placesApi.deleteImage(place.trip_id, place.id, imageId)
+      setCustomImages(prev => prev.filter(image => image.id !== imageId))
+      setImageViewerIndex(prev => {
+        if (prev == null) return prev
+        const nextImages = galleryImages.filter(image => image.customImageId !== imageId)
+        return nextImages.length ? Math.min(prev, nextImages.length - 1) : null
+      })
+    } catch (err: unknown) {
+      console.error('Image delete failed', err)
+      toast.error(translateApiError(t, err, 'common.unknownError'))
+    } finally {
+      setDeletingImageId(null)
+    }
+  }, [galleryImages, mode, place, t, toast])
 
   if (!place) return null
 
@@ -264,27 +360,6 @@ export default function PlaceInspector({
   const weekdayIndex = getWeekdayIndex(selectedDay?.date)
 
   const placeFiles = (files || []).filter(f => String(f.place_id) === String(place.id) || (f.linked_place_ids || []).includes(place.id))
-
-  const handleFileUpload = useCallback(async (e) => {
-    const selectedFiles = Array.from((e.target as HTMLInputElement).files || [])
-    if (!selectedFiles.length || !onFileUpload) return
-    setIsUploading(true)
-    try {
-      for (const file of selectedFiles) {
-        const fd = new FormData()
-        fd.append('file', file)
-        fd.append('place_id', String(place.id))
-        await onFileUpload(fd)
-      }
-      setFilesExpanded(true)
-    } catch (err: unknown) {
-      console.error('Upload failed', err)
-      toast.error(translateApiError(t, err, 'files.uploadError'))
-    } finally {
-      setIsUploading(false)
-      if (fileInputRef.current) fileInputRef.current.value = ''
-    }
-  }, [onFileUpload, place.id, toast, t])
 
   return (
     <div
@@ -375,7 +450,10 @@ export default function PlaceInspector({
             setHoursExpanded={setHoursExpanded} timeFormat={timeFormat} t={t} place={place} placeFiles={placeFiles}
             onFileUpload={onFileUpload} filesExpanded={filesExpanded} setFilesExpanded={setFilesExpanded}
             fileInputRef={fileInputRef} handleFileUpload={handleFileUpload} isUploading={isUploading}
-            distanceUnit={distanceUnit} onOpenImageViewer={() => setImageViewerOpen(true)} />
+            distanceUnit={distanceUnit} galleryImages={galleryImages} imageInputRef={imageInputRef}
+            handleImageUpload={handleImageUpload} isUploadingImage={isUploadingImage}
+            onOpenImageViewer={(index: number) => setImageViewerIndex(index)}
+            onDeleteCustomImage={handleDeleteImage} deletingImageId={deletingImageId} canEditImages={mode === 'trip'} />
 
           {/* Extra native rows from placeDetailProvider plugins (#1429). */}
           {mode === 'trip' && providerDetails.length > 0 && (
@@ -458,8 +536,15 @@ export default function PlaceInspector({
               ))}
         </div>
       </div>
-      {imageViewerOpen && place.image_url && (
-        <PlaceImageViewer imageUrl={place.image_url} title={place.name} onClose={() => setImageViewerOpen(false)} />
+      {imageViewerIndex !== null && galleryImages.length > 0 && (
+        <PlaceImageViewer
+          images={galleryImages}
+          index={Math.min(imageViewerIndex, galleryImages.length - 1)}
+          onIndexChange={setImageViewerIndex}
+          onClose={() => setImageViewerIndex(null)}
+          onDeleteCustomImage={handleDeleteImage}
+          deletingImageId={deletingImageId}
+        />
       )}
     </div>
   )
@@ -840,7 +925,8 @@ function PlaceReservationParticipants({ selectedAssignmentId, reservations, assi
 
 function PlaceExtras({ openingHours, weekdayIndex, hoursExpanded, setHoursExpanded, timeFormat, t, place,
   placeFiles, onFileUpload, filesExpanded, setFilesExpanded, fileInputRef, handleFileUpload, isUploading, distanceUnit,
-  onOpenImageViewer }: any) {
+  galleryImages, imageInputRef, handleImageUpload, isUploadingImage, onOpenImageViewer, onDeleteCustomImage,
+  deletingImageId, canEditImages }: any) {
   return (
           <div className={`grid grid-cols-1 ${openingHours?.length > 0 ? 'sm:grid-cols-2' : ''} gap-2`}>
           {openingHours && openingHours.length > 0 && (
@@ -1007,59 +1093,95 @@ function PlaceExtras({ openingHours, weekdayIndex, hoursExpanded, setHoursExpand
             </div>
           )}
 
-          {place.image_url && (
+          {(galleryImages.length > 0 || canEditImages) && (
             <div className="bg-surface-hover" style={{ gridColumn: '1 / -1', borderRadius: 10, overflow: 'hidden' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px' }}>
-                <FileImage size={13} color="#9ca3af" />
-                <span className="text-content-secondary" style={{ fontSize: 'calc(12px * var(--fs-scale-body, 1))', fontWeight: 500 }}>
-                  {t('files.filterImages') || 'Images'}
+                <FileImage size={13} color="#9ca3af" style={{ flexShrink: 0 }} />
+                <span className="text-content-secondary" style={{ fontSize: 'calc(12px * var(--fs-scale-body, 1))', fontWeight: 500, flex: 1 }}>
+                  {t('files.filterImages') || 'Images'}{galleryImages.length > 0 ? ` (${galleryImages.length})` : ''}
                 </span>
+                {canEditImages && (
+                  <label className="text-content-muted bg-surface-tertiary" style={{ cursor: isUploadingImage ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 'calc(11px * var(--fs-scale-caption, 1))', padding: '2px 6px', borderRadius: 6, opacity: isUploadingImage ? 0.7 : 1 }}>
+                    <input ref={imageInputRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={handleImageUpload} disabled={isUploadingImage} />
+                    {isUploadingImage ? <span style={{ fontSize: 'calc(11px * var(--fs-scale-caption, 1))' }}>…</span> : <><Upload size={11} strokeWidth={2} /> {t('common.upload')}</>}
+                  </label>
+                )}
               </div>
-              <button
-                onClick={onOpenImageViewer}
-                style={{
-                  display: 'block',
-                  width: '100%',
-                  padding: '0 12px 12px',
-                  border: 'none',
-                  background: 'none',
-                  cursor: 'zoom-in',
-                }}
-                aria-label={place.name}
-              >
-                <img
-                  src={place.image_url}
-                  alt={place.name}
-                  style={{
-                    display: 'block',
-                    width: '100%',
-                    maxHeight: 260,
-                    objectFit: 'contain',
-                    borderRadius: 8,
-                    background: 'rgba(0,0,0,0.06)',
-                  }}
-                />
-              </button>
+              {galleryImages.length > 0 && (
+                <div style={{ padding: '0 12px 12px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8 }}>
+                  {galleryImages.map((image: GalleryImage, index: number) => (
+                    <div key={image.id} style={{ position: 'relative', borderRadius: 8, overflow: 'hidden', background: 'rgba(0,0,0,0.06)' }}>
+                      <button
+                        onClick={() => onOpenImageViewer(index)}
+                        style={{ display: 'block', width: '100%', padding: 0, border: 'none', background: 'none', cursor: 'zoom-in' }}
+                        aria-label={image.title || place.name}
+                      >
+                        <img
+                          src={image.src}
+                          alt={image.title || place.name}
+                          style={{ display: 'block', width: '100%', height: galleryImages.length === 1 ? 'auto' : 150, maxHeight: galleryImages.length === 1 ? 260 : undefined, objectFit: galleryImages.length === 1 ? 'contain' : 'cover' }}
+                        />
+                      </button>
+                      {image.customImageId && canEditImages && (
+                        <button
+                          type="button"
+                          onClick={() => onDeleteCustomImage(image.customImageId)}
+                          disabled={deletingImageId === image.customImageId}
+                          className="bg-surface-elevated"
+                          style={{ position: 'absolute', top: 6, right: 6, width: 26, height: 26, borderRadius: '50%', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.18)', opacity: deletingImageId === image.customImageId ? 0.6 : 1 }}
+                          aria-label={t('common.delete')}
+                        >
+                          <Trash2 size={13} color="#dc2626" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
           </div>
   )
 }
 
-function PlaceImageViewer({ imageUrl, title, onClose }: { imageUrl: string; title: string; onClose: () => void }) {
+function PlaceImageViewer({
+  images,
+  index,
+  onIndexChange,
+  onClose,
+  onDeleteCustomImage,
+  deletingImageId,
+}: {
+  images: GalleryImage[]
+  index: number
+  onIndexChange: (index: number) => void
+  onClose: () => void
+  onDeleteCustomImage: (imageId: number) => void
+  deletingImageId: number | null
+}) {
+  const image = images[index]
+  const canGoPrev = images.length > 1
+  const canGoNext = images.length > 1
+  const goPrev = useCallback(() => onIndexChange((index - 1 + images.length) % images.length), [images.length, index, onIndexChange])
+  const goNext = useCallback(() => onIndexChange((index + 1) % images.length), [images.length, index, onIndexChange])
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
+      if (e.key === 'ArrowLeft' && images.length > 1) goPrev()
+      if (e.key === 'ArrowRight' && images.length > 1) goNext()
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [onClose])
+  }, [goNext, goPrev, images.length, onClose])
+
+  if (!image) return null
 
   return (
     <div
       role="dialog"
       aria-modal="true"
-      aria-label={title}
+      aria-label={image.title}
       onClick={onClose}
       style={{
         position: 'fixed',
@@ -1073,23 +1195,45 @@ function PlaceImageViewer({ imageUrl, title, onClose }: { imageUrl: string; titl
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '10px 16px', flexShrink: 0 }} onClick={e => e.stopPropagation()}>
         <span style={{ color: 'rgba(255,255,255,0.78)', fontSize: 'calc(12px * var(--fs-scale-body, 1))', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {title}
+          {image.title}{images.length > 1 ? ` ${index + 1}/${images.length}` : ''}
         </span>
-        <button
-          onClick={onClose}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.78)', display: 'flex', padding: 4, flexShrink: 0 }}
-          aria-label="Close"
-        >
-          <X size={18} />
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          {image.customImageId && (
+            <button
+              onClick={() => onDeleteCustomImage(image.customImageId!)}
+              disabled={deletingImageId === image.customImageId}
+              style={{ background: 'rgba(239,68,68,0.16)', border: 'none', borderRadius: 8, cursor: 'pointer', color: '#fca5a5', display: 'flex', padding: 6, opacity: deletingImageId === image.customImageId ? 0.6 : 1 }}
+              aria-label="Delete image"
+            >
+              <Trash2 size={16} />
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.78)', display: 'flex', padding: 4 }}
+            aria-label="Close"
+          >
+            <X size={18} />
+          </button>
+        </div>
       </div>
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, position: 'relative' }} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+        {canGoPrev && (
+          <button onClick={(e) => { e.stopPropagation(); goPrev() }} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', width: 38, height: 38, borderRadius: '50%', border: 'none', background: 'rgba(255,255,255,0.12)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Previous image">
+            <ChevronLeft size={22} />
+          </button>
+        )}
         <img
-          src={imageUrl}
-          alt={title}
+          src={image.src}
+          alt={image.title}
           onClick={e => e.stopPropagation()}
           style={{ display: 'block', maxWidth: '94vw', maxHeight: '82vh', objectFit: 'contain', borderRadius: 8 }}
         />
+        {canGoNext && (
+          <button onClick={(e) => { e.stopPropagation(); goNext() }} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', width: 38, height: 38, borderRadius: '50%', border: 'none', background: 'rgba(255,255,255,0.12)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Next image">
+            <ChevronRight size={22} />
+          </button>
+        )}
       </div>
     </div>
   )

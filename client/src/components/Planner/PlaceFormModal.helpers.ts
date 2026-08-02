@@ -10,6 +10,7 @@ export interface PlaceFormData {
   notes: string
   transport_mode: string
   website: string
+  image_url?: string | null
   // Populated from a maps-search pick (not part of the initial blank form).
   phone?: string
   google_place_id?: string

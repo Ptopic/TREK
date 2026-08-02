@@ -15,6 +15,7 @@ import {
 } from './kmlImport';
 import { enrichImportedPlaces, type EnrichablePlace } from './placeEnrichment';
 import * as placePhotoCache from './placePhotoCache';
+import { deleteImagesForPlaceSync } from './placeImageService';
 import { searchUnsplashPhotos, getUnsplashKey } from './unsplashService';
 import { type UpdateConflict, isUpdateConflict } from './conflictResult';
 
@@ -119,7 +120,7 @@ export function createPlace(
     name: string; description?: string; lat?: number; lng?: number; address?: string;
     category_id?: number; price?: number; currency?: string;
     place_time?: string; end_time?: string;
-    duration_minutes?: number; notes?: string; image_url?: string;
+    duration_minutes?: number; notes?: string; image_url?: string | null;
     google_place_id?: string; google_ftid?: string; osm_id?: string; website?: string; phone?: string;
     transport_mode?: string; tags?: number[];
   },
@@ -176,7 +177,7 @@ export function updatePlace(
     name?: string; description?: string; lat?: number; lng?: number; address?: string;
     category_id?: number; price?: number; currency?: string;
     place_time?: string; end_time?: string;
-    duration_minutes?: number; notes?: string; image_url?: string;
+    duration_minutes?: number; notes?: string; image_url?: string | null;
     google_place_id?: string; google_ftid?: string; osm_id?: string; website?: string; phone?: string;
     transport_mode?: string; tags?: number[];
   },
@@ -267,6 +268,7 @@ export function deletePlace(tripId: string, placeId: string): boolean {
     'SELECT google_place_id, image_url FROM places WHERE id = ? AND trip_id = ?'
   ).get(placeId, tripId) as { google_place_id: string | null; image_url: string | null } | undefined;
   if (!place) return false;
+  deleteImagesForPlaceSync(tripId, placeId);
   db.prepare('DELETE FROM places WHERE id = ?').run(placeId);
   reclaimPhotoCache(place.google_place_id, place.image_url);
   return true;
@@ -282,6 +284,7 @@ export function deletePlacesMany(tripId: string, ids: number[]): number[] {
     for (const id of list) {
       const row = selectStmt.get(id, tripId) as { google_place_id: string | null; image_url: string | null } | undefined;
       if (!row) continue;
+      deleteImagesForPlaceSync(tripId, id);
       deleteStmt.run(id);
       deleted.push(id);
       reclaimable.push(row);

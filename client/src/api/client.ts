@@ -398,6 +398,9 @@ export const placesApi = {
   update: (tripId: number | string, id: number | string, data: PlaceUpdateRequest) => apiClient.put(`/trips/${tripId}/places/${id}`, data).then(r => r.data),
   delete: (tripId: number | string, id: number | string) => apiClient.delete(`/trips/${tripId}/places/${id}`).then(r => r.data),
   searchImage: (tripId: number | string, id: number | string) => apiClient.get(`/trips/${tripId}/places/${id}/image`).then(r => r.data),
+  listImages: (tripId: number | string, id: number | string) => apiClient.get(`/trips/${tripId}/places/${id}/images`).then(r => r.data),
+  uploadImage: (tripId: number | string, id: number | string, formData: FormData, opts?: UploadOptions) => postMultipart(`/trips/${tripId}/places/${id}/images`, formData, opts),
+  deleteImage: (tripId: number | string, id: number | string, imageId: number | string) => apiClient.delete(`/trips/${tripId}/places/${id}/images/${imageId}`).then(r => r.data),
   importGpx: (tripId: number | string, file: File, opts?: { waypoints?: boolean; routes?: boolean; tracks?: boolean }) => {
     const fd = new FormData()
     fd.append('file', file)

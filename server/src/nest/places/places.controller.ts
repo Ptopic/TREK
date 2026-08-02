@@ -13,17 +13,51 @@ import {
   UploadedFile,
   UseGuards,
   UseInterceptors,
+  Res,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { memoryStorage } from 'multer';
+import { diskStorage, memoryStorage } from 'multer';
+import type { Response } from 'express';
+import fs from 'fs';
+import path from 'path';
+import { v4 as uuidv4 } from 'uuid';
 import type { User } from '../../types';
 import { PlacesService } from './places.service';
 import { isUpdateConflict } from '../../services/conflictResult';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { isDemoEmail } from '../../services/demo';
+import {
+  MAX_PLACE_IMAGE_SIZE,
+  createPlaceImage,
+  deletePlaceImage,
+  getPlaceImage,
+  isSupportedPlaceImage,
+  listPlaceImages,
+  placeExists,
+  placeImagesDir,
+  resolvePlaceImagePath,
+} from '../../services/placeImageService';
 
 const STRING_LIMITS: Record<string, number> = { name: 200, description: 2000, address: 500, notes: 2000 };
 const UPLOAD = { storage: memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } };
+const IMAGE_UPLOAD = {
+  storage: diskStorage({
+    destination: (_req, _file, cb) => {
+      if (!fs.existsSync(placeImagesDir)) fs.mkdirSync(placeImagesDir, { recursive: true });
+      cb(null, placeImagesDir);
+    },
+    filename: (_req, file, cb) => cb(null, `${uuidv4()}${path.extname(file.originalname || '')}`),
+  }),
+  limits: { fileSize: MAX_PLACE_IMAGE_SIZE },
+  defParamCharset: 'utf8',
+  fileFilter: (_req: unknown, file: Express.Multer.File, cb: (err: Error | null, accept: boolean) => void) => {
+    if (isSupportedPlaceImage(file)) return cb(null, true);
+    const err: Error & { statusCode?: number } = new Error('Only image uploads are supported');
+    err.statusCode = 400;
+    cb(err, false);
+  },
+};
 
 function validateLengths(body: Record<string, unknown>): void {
   for (const [field, max] of Object.entries(STRING_LIMITS)) {
@@ -280,6 +314,98 @@ export class PlacesController {
       console.error('Unsplash error:', err);
       throw new HttpException({ error: 'Error searching for image' }, 500);
     }
+  }
+
+  @Get(':id/images')
+  images(@CurrentUser() user: User, @Param('tripId') tripId: string, @Param('id') id: string) {
+    this.requireTrip(tripId, user);
+    if (!placeExists(tripId, id)) {
+      throw new HttpException({ error: 'Place not found' }, 404);
+    }
+    return { images: listPlaceImages(tripId, id) };
+  }
+
+  @Post(':id/images')
+  @UseInterceptors(FileInterceptor('file', IMAGE_UPLOAD))
+  uploadImage(
+    @CurrentUser() user: User,
+    @Param('tripId') tripId: string,
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Headers('x-socket-id') socketId?: string,
+  ) {
+    const cleanup = () => { if (file?.path) { try { fs.unlinkSync(file.path); } catch { /* best-effort */ } } };
+    try {
+      const trip = this.requireTrip(tripId, user);
+      this.requireEdit(trip, user);
+      if (process.env.DEMO_MODE?.toLowerCase() === 'true' && isDemoEmail(user.email)) {
+        throw new HttpException({ error: 'Uploads are disabled in demo mode. Self-host TREK for full functionality.' }, 403);
+      }
+      if (!placeExists(tripId, id)) {
+        throw new HttpException({ error: 'Place not found' }, 404);
+      }
+    } catch (err) {
+      cleanup();
+      throw err;
+    }
+    if (!file) {
+      throw new HttpException({ error: 'No file uploaded' }, 400);
+    }
+    if (!isSupportedPlaceImage(file)) {
+      cleanup();
+      throw new HttpException({ error: 'Only image uploads are supported' }, 400);
+    }
+    const image = createPlaceImage(tripId, id, file);
+    this.places.broadcast(tripId, 'place:updated', { place: this.places.get(tripId, id) }, socketId);
+    return { image };
+  }
+
+  @Get(':id/images/:imageId')
+  streamImage(
+    @CurrentUser() user: User,
+    @Param('tripId') tripId: string,
+    @Param('id') id: string,
+    @Param('imageId') imageId: string,
+    @Res() res: Response,
+  ) {
+    this.requireTrip(tripId, user);
+    const image = getPlaceImage(tripId, id, imageId);
+    if (!image) {
+      throw new HttpException({ error: 'Image not found' }, 404);
+    }
+    const { resolved, safe } = resolvePlaceImagePath(image.filename);
+    if (!safe) {
+      throw new HttpException({ error: 'Forbidden' }, 403);
+    }
+    if (!fs.existsSync(resolved)) {
+      throw new HttpException({ error: 'Image not found' }, 404);
+    }
+    if (image.mime_type) res.setHeader('Content-Type', image.mime_type);
+    res.sendFile(path.basename(resolved), { root: path.dirname(resolved) });
+  }
+
+  @Delete(':id/images/:imageId')
+  async deleteImage(
+    @CurrentUser() user: User,
+    @Param('tripId') tripId: string,
+    @Param('id') id: string,
+    @Param('imageId') imageId: string,
+    @Headers('x-socket-id') socketId?: string,
+  ) {
+    const trip = this.requireTrip(tripId, user);
+    this.requireEdit(trip, user);
+    const image = getPlaceImage(tripId, id, imageId);
+    if (!image) {
+      throw new HttpException({ error: 'Image not found' }, 404);
+    }
+    try {
+      await deletePlaceImage(image);
+    } catch (err) {
+      console.error('[Places] Failed to delete place image:', err instanceof Error ? err.message : err);
+      throw new HttpException({ error: 'Failed to delete image' }, 500);
+    }
+    this.places.broadcast(tripId, 'place:updated', { place: this.places.get(tripId, id) }, socketId);
+    return { success: true };
   }
 
   @Put(':id')

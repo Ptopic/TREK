@@ -103,6 +103,20 @@ export interface TripFile {
   url: string
 }
 
+export interface PlaceImage {
+  id: number
+  trip_id: number
+  place_id: number
+  filename: string
+  original_name: string
+  file_size?: number | null
+  mime_type?: string | null
+  caption?: string | null
+  taken_at?: string | null
+  created_at: string
+  url: string
+}
+
 export type DistanceUnit = 'metric' | 'imperial'
 
 export interface Settings {

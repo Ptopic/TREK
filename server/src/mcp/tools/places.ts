@@ -126,14 +126,15 @@ export function registerPlaceTools(server: McpServer, userId: number, scopes: st
         google_place_id: z.string().optional().describe('Google Place ID (e.g. "ChIJd8BlQ2BZwokRAFUEcm_qrcA")'),
         google_ftid: z.string().optional().describe('Google Maps feature ID (e.g. "0x89c259b7abdd4769:0x103aaf1c8bf8a050")'),
         attach_google_photo: z.boolean().optional().describe('Fetch and attach exactly one Google Places photo using the separate Google Photos API key. If google_place_id is missing, first resolves only places.id from the saved Google Maps search URL or place name/address. Does not fall back to Wikimedia.'),
+        remove_image: z.boolean().optional().describe('Clear the current place cover image / Google photo URL. Custom uploaded place images are not affected.'),
       },
       annotations: TOOL_ANNOTATIONS_WRITE,
     },
-    async ({ tripId, placeId, name, description, lat, lng, address, category_id, price, currency, place_time, end_time, duration_minutes, notes, website, phone, transport_mode, osm_id, google_place_id, google_ftid, attach_google_photo }) => {
+    async ({ tripId, placeId, name, description, lat, lng, address, category_id, price, currency, place_time, end_time, duration_minutes, notes, website, phone, transport_mode, osm_id, google_place_id, google_ftid, attach_google_photo, remove_image }) => {
       if (isDemoUser(userId)) return demoDenied();
       if (!canAccessTrip(tripId, userId)) return noAccess();
       if (!hasTripPermission('place_edit', tripId, userId)) return permissionDenied();
-      const place = updatePlace(String(tripId), String(placeId), { name, description, lat, lng, address, category_id, price, currency, place_time, end_time, duration_minutes, notes, website, phone, transport_mode, osm_id, google_place_id, google_ftid });
+      const place = updatePlace(String(tripId), String(placeId), { name, description, lat, lng, address, category_id, price, currency, place_time, end_time, duration_minutes, notes, website, phone, transport_mode, osm_id, google_place_id, google_ftid, image_url: remove_image ? null : undefined });
       if (!place) return { content: [{ type: 'text' as const, text: 'Place not found.' }], isError: true };
       let nextPlace = place;
       let googlePhoto: { photoUrl: string; attribution: string | null; cached: boolean; usage: { month: string; count: number } } | null = null;

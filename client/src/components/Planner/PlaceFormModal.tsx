@@ -8,7 +8,7 @@ import { useTripStore } from '../../store/tripStore'
 import { useAddonStore } from '../../store/addonStore'
 import CollectionPicker from '../Collections/CollectionPicker'
 import { useToast } from '../shared/Toast'
-import { Search, Paperclip, X, AlertTriangle, Loader2 } from 'lucide-react'
+import { Search, Paperclip, X, AlertTriangle, Loader2, Image as ImageIcon, Trash2 } from 'lucide-react'
 import { useTranslation } from '../../i18n'
 import CustomTimePicker from '../shared/CustomTimePicker'
 import { DEFAULT_FORM, isGoogleMapsUrl, type PlaceFormData } from './PlaceFormModal.helpers'
@@ -118,6 +118,7 @@ function usePlaceFormModal(props: PlaceFormModalProps) {
         notes: place.notes || '',
         transport_mode: place.transport_mode || 'walking',
         website: place.website || '',
+        image_url: place.image_url ?? null,
       })
     } else if (prefillCoords) {
       setForm({
@@ -362,6 +363,10 @@ function usePlaceFormModal(props: PlaceFormModalProps) {
     setPendingFiles(prev => prev.filter((_, i) => i !== idx))
   }
 
+  const handleRemoveCoverImage = () => {
+    setForm(prev => ({ ...prev, image_url: null }))
+  }
+
   // Paste support for files/images
   const handlePaste = (e: React.ClipboardEvent) => {
     if (!canUploadFiles) return
@@ -468,6 +473,7 @@ function usePlaceFormModal(props: PlaceFormModalProps) {
     handleCreateCategory,
     handleFileAdd,
     handleRemoveFile,
+    handleRemoveCoverImage,
     handlePaste,
     hasTimeError,
     handleSubmit,
@@ -532,6 +538,7 @@ export default function PlaceFormModal(props: PlaceFormModalProps) {
     handleCreateCategory,
     handleFileAdd,
     handleRemoveFile,
+    handleRemoveCoverImage,
     handlePaste,
     hasTimeError,
     handleSubmit,
@@ -793,6 +800,30 @@ export default function PlaceFormModal(props: PlaceFormModalProps) {
             className="form-input"
           />
         </div>
+
+        {place && form.image_url && (
+          <div className="border border-gray-200 rounded-xl p-3 space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700">
+                <ImageIcon size={14} className="text-slate-400" />
+                {t('files.filterImages') || 'Images'}
+              </label>
+              <button
+                type="button"
+                onClick={handleRemoveCoverImage}
+                className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 transition-colors"
+              >
+                <Trash2 size={12} /> {t('common.delete')}
+              </button>
+            </div>
+            <img
+              src={form.image_url}
+              alt={form.name || place.name}
+              className="w-full rounded-lg bg-slate-100 object-contain"
+              style={{ maxHeight: 180 }}
+            />
+          </div>
+        )}
 
         {/* File Attachments */}
         {canUploadFiles && (
