@@ -2,11 +2,11 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp';
 import { z } from 'zod';
 import { canAccessTrip, db } from '../../db/database';
 import { isDemoUser } from '../../services/authService';
-import { deletePlacesMany, updatePlacesMany, importGoogleList, importNaverList, listPlaces, createPlace, updatePlace, deletePlace } from '../../services/placeService';
+import { deletePlacesMany, updatePlacesMany, importGoogleList, importNaverList, listPlaces, createPlace, updatePlace, deletePlace, getPlace } from '../../services/placeService';
 import { createAssignment, dayExists } from '../../services/assignmentService';
 import { onPlaceDeleted, reconcileTripSkeletons } from '../../services/journeyService';
 import { listCategories } from '../../services/categoryService';
-import { searchPlaces } from '../../services/mapsService';
+import { attachFirstGooglePlacePhoto, searchPlaces } from '../../services/mapsService';
 import {
   safeBroadcast, TOOL_ANNOTATIONS_READONLY, TOOL_ANNOTATIONS_WRITE,
   TOOL_ANNOTATIONS_DELETE, TOOL_ANNOTATIONS_NON_IDEMPOTENT,
@@ -125,17 +125,29 @@ export function registerPlaceTools(server: McpServer, userId: number, scopes: st
         osm_id: z.string().optional().describe('OpenStreetMap ID (e.g. "way:12345")'),
         google_place_id: z.string().optional().describe('Google Place ID (e.g. "ChIJd8BlQ2BZwokRAFUEcm_qrcA")'),
         google_ftid: z.string().optional().describe('Google Maps feature ID (e.g. "0x89c259b7abdd4769:0x103aaf1c8bf8a050")'),
+        attach_google_photo: z.boolean().optional().describe('Fetch and attach exactly one Google Places photo using the separate Google Photos API key. Requires google_place_id on the place. Does not fall back to Wikimedia.'),
       },
       annotations: TOOL_ANNOTATIONS_WRITE,
     },
-    async ({ tripId, placeId, name, description, lat, lng, address, category_id, price, currency, place_time, end_time, duration_minutes, notes, website, phone, transport_mode, osm_id, google_place_id, google_ftid }) => {
+    async ({ tripId, placeId, name, description, lat, lng, address, category_id, price, currency, place_time, end_time, duration_minutes, notes, website, phone, transport_mode, osm_id, google_place_id, google_ftid, attach_google_photo }) => {
       if (isDemoUser(userId)) return demoDenied();
       if (!canAccessTrip(tripId, userId)) return noAccess();
       if (!hasTripPermission('place_edit', tripId, userId)) return permissionDenied();
       const place = updatePlace(String(tripId), String(placeId), { name, description, lat, lng, address, category_id, price, currency, place_time, end_time, duration_minutes, notes, website, phone, transport_mode, osm_id, google_place_id, google_ftid });
       if (!place) return { content: [{ type: 'text' as const, text: 'Place not found.' }], isError: true };
-      safeBroadcast(tripId, 'place:updated', { place });
-      return ok({ place });
+      let nextPlace = place;
+      let googlePhoto: { photoUrl: string; attribution: string | null; cached: boolean; usage: { month: string; count: number } } | null = null;
+      if (attach_google_photo) {
+        try {
+          googlePhoto = await attachFirstGooglePlacePhoto(userId, tripId, placeId);
+          nextPlace = getPlace(String(tripId), String(placeId)) || place;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Google photo fetch failed.';
+          return { content: [{ type: 'text' as const, text: message }], isError: true };
+        }
+      }
+      safeBroadcast(tripId, 'place:updated', { place: nextPlace });
+      return ok({ place: nextPlace, google_photo: googlePhoto });
     }
   );
 

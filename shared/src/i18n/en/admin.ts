@@ -138,6 +138,10 @@ const admin: TranslationStrings = {
   'admin.weatherKeyHint': 'For weather data. Free at openweathermap.org',
   'admin.unsplashKey': 'Unsplash API Key',
   'admin.unsplashKeyHint': 'For image search. Free at unsplash.com/developers',
+  'admin.googlePhotosKey': 'Google Places Photos API Key',
+  'admin.googlePhotosKeyHint':
+    'Used only when MCP update_place is called with attach_google_photo. Fetches and caches one Google listing photo per requested place.',
+  'admin.googlePhotosUsage': 'Google photo fetches this month',
   'admin.validateKey': 'Test',
   'admin.keyValid': 'Connected',
   'admin.keyInvalid': 'Invalid',

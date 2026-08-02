@@ -26,7 +26,7 @@ export default function AdminSettingsTab({ admin, t }: AdminSettingsTabProps): R
     passkeyLogin, setPasskeyLogin, passkeyConfigured,
     webauthnRpId, setWebauthnRpId, webauthnOrigins, setWebauthnOrigins, savingWebauthn, handleSaveWebauthn,
     allowedFileTypes, setAllowedFileTypes, savingFileTypes, setSavingFileTypes,
-    mapsKey, setMapsKey, unsplashKey, setUnsplashKey, showKeys, savingKeys, validating, validation,
+    mapsKey, setMapsKey, googlePhotosKey, setGooglePhotosKey, googlePhotosUsage, unsplashKey, setUnsplashKey, showKeys, savingKeys, validating, validation,
     setShowRotateJwtModal,
     handleToggleAuthSetting, handleToggleRequireMfa,
     toggleKey, handleSaveApiKeys, handleValidateKey,
@@ -300,6 +300,35 @@ export default function AdminSettingsTab({ admin, t }: AdminSettingsTabProps): R
               <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
                 <span className="w-2 h-2 bg-red-500 rounded-full inline-block"></span>
                 {t('admin.keyInvalid')}
+              </p>
+            )}
+          </div>
+
+          {/* Google Places Photos Key */}
+          <div>
+            <label className="flex items-center gap-2 text-sm font-medium text-slate-700 mb-1.5">
+              {t('admin.googlePhotosKey')}
+            </label>
+            <div className="relative">
+              <input
+                type={showKeys.googlePhotos ? 'text' : 'password'}
+                value={googlePhotosKey}
+                onChange={e => setGooglePhotosKey(e.target.value)}
+                placeholder={t('settings.keyPlaceholder')}
+                className="w-full pr-10 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-slate-400 focus:border-transparent"
+              />
+              <button
+                type="button"
+                onClick={() => toggleKey('googlePhotos')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                {showKeys.googlePhotos ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            <p className="text-xs text-slate-400 mt-1">{t('admin.googlePhotosKeyHint')}</p>
+            {googlePhotosUsage && (
+              <p className="text-xs text-slate-500 mt-1">
+                {t('admin.googlePhotosUsage')}: {googlePhotosUsage.count.toLocaleString()} / {googlePhotosUsage.month}
               </p>
             )}
           </div>

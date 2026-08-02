@@ -162,6 +162,50 @@ export function getMapsKey(userId: number): string | null {
   return decrypt_api_key(admin?.maps_api_key) || null;
 }
 
+export function getGooglePhotosKey(userId: number): string | null {
+  const user = db.prepare('SELECT google_photos_api_key FROM users WHERE id = ?').get(userId) as
+    | { google_photos_api_key: string | null }
+    | undefined;
+  const userKey = decrypt_api_key(user?.google_photos_api_key);
+  if (userKey) return userKey;
+  const admin = db
+    .prepare(
+      "SELECT google_photos_api_key FROM users WHERE role = 'admin' AND google_photos_api_key IS NOT NULL AND google_photos_api_key != '' LIMIT 1",
+    )
+    .get() as { google_photos_api_key: string } | undefined;
+  return decrypt_api_key(admin?.google_photos_api_key) || null;
+}
+
+const GOOGLE_PHOTO_USAGE_MONTH_KEY = 'google_places_photo_usage_month';
+const GOOGLE_PHOTO_USAGE_COUNT_KEY = 'google_places_photo_usage_count';
+
+function currentUsageMonth(): string {
+  return new Date().toISOString().slice(0, 7);
+}
+
+export function getGooglePhotoUsage(): { month: string; count: number } {
+  const month = currentUsageMonth();
+  const storedMonth = db.prepare('SELECT value FROM app_settings WHERE key = ?').get(GOOGLE_PHOTO_USAGE_MONTH_KEY) as
+    | { value: string }
+    | undefined;
+  if (storedMonth?.value !== month) {
+    return { month, count: 0 };
+  }
+  const storedCount = db.prepare('SELECT value FROM app_settings WHERE key = ?').get(GOOGLE_PHOTO_USAGE_COUNT_KEY) as
+    | { value: string }
+    | undefined;
+  const count = Number.parseInt(storedCount?.value || '0', 10);
+  return { month, count: Number.isFinite(count) ? count : 0 };
+}
+
+function incrementGooglePhotoUsage(): { month: string; count: number } {
+  const usage = getGooglePhotoUsage();
+  const next = usage.count + 1;
+  db.prepare('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)').run(GOOGLE_PHOTO_USAGE_MONTH_KEY, usage.month);
+  db.prepare('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)').run(GOOGLE_PHOTO_USAGE_COUNT_KEY, String(next));
+  return { month: usage.month, count: next };
+}
+
 // ── Nominatim search ─────────────────────────────────────────────────────────
 
 export async function searchNominatim(query: string, lang?: string) {
@@ -1132,6 +1176,93 @@ export async function getPlacePhoto(
   const result = await fetchPromise;
   if (!result) throw Object.assign(new Error('No photo available'), { status: 404 });
   return { photoUrl: `/api/maps/place-photo/${encodeURIComponent(placeId)}/bytes`, attribution: result.attribution };
+}
+
+export async function attachFirstGooglePlacePhoto(
+  userId: number,
+  tripId: number,
+  placeId: number,
+): Promise<{ photoUrl: string; attribution: string | null; cached: boolean; usage: { month: string; count: number } }> {
+  const place = db
+    .prepare('SELECT id, google_place_id FROM places WHERE id = ? AND trip_id = ?')
+    .get(placeId, tripId) as { id: number; google_place_id: string | null } | undefined;
+  if (!place) throw Object.assign(new Error('Place not found'), { status: 404 });
+  const googlePlaceId = (place.google_place_id || '').trim();
+  if (!googlePlaceId) throw Object.assign(new Error('Place has no google_place_id'), { status: 400 });
+  if (/^https?:\/\//i.test(googlePlaceId) || googlePlaceId.startsWith('coords:')) {
+    throw Object.assign(new Error('Place does not have a Google Place ID'), { status: 400 });
+  }
+
+  const diskHit = placePhotoCache.get(googlePlaceId);
+  if (diskHit) {
+    db.prepare('UPDATE places SET image_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND trip_id = ?').run(
+      diskHit.photoUrl,
+      placeId,
+      tripId,
+    );
+    return { photoUrl: diskHit.photoUrl, attribution: diskHit.attribution, cached: true, usage: getGooglePhotoUsage() };
+  }
+  if (placePhotoCache.getErrored(googlePlaceId)) {
+    throw Object.assign(new Error('(Cache) No photo available'), { status: 404 });
+  }
+
+  const apiKey = getGooglePhotosKey(userId);
+  if (!apiKey) throw Object.assign(new Error('Google Places Photos API key not configured'), { status: 400 });
+
+  await acquirePhotoFetchSlot();
+  try {
+    const detailsRes = await googleFetch(
+      `https://places.googleapis.com/v1/places/${googlePlaceId}`,
+      `attachFirstGooglePlacePhoto/details(${googlePlaceId})`,
+      {
+        headers: {
+          'X-Goog-Api-Key': apiKey,
+          'X-Goog-FieldMask': 'photos',
+        },
+      },
+    );
+    const body = await detailsRes.text();
+    if (!detailsRes.ok) {
+      throw Object.assign(new Error(body.slice(0, 200) || 'Google Places photo details error'), {
+        status: detailsRes.status,
+      });
+    }
+    let details: GooglePlaceDetails & { error?: { message?: string } };
+    try {
+      details = body ? JSON.parse(body) : { photos: [] };
+    } catch {
+      throw Object.assign(new Error('Invalid Google Places photo response'), { status: 502 });
+    }
+    const photo = details.photos?.[0];
+    if (!photo?.name) {
+      placePhotoCache.markError(googlePlaceId);
+      throw Object.assign(new Error('No Google photo available'), { status: 404 });
+    }
+
+    const attribution = photo.authorAttributions?.[0]?.displayName || null;
+    const mediaRes = await googleFetch(
+      `https://places.googleapis.com/v1/${photo.name}/media?maxHeightPx=800`,
+      `attachFirstGooglePlacePhoto/media(${googlePlaceId})`,
+      { headers: { 'X-Goog-Api-Key': apiKey } },
+    );
+    if (!mediaRes.ok) {
+      throw Object.assign(new Error('Google Places photo media error'), { status: mediaRes.status });
+    }
+
+    const bytes = Buffer.from(await mediaRes.arrayBuffer());
+    if (!bytes.length) throw Object.assign(new Error('Google Places photo media response was empty'), { status: 502 });
+
+    const cached = await placePhotoCache.put(googlePlaceId, bytes, attribution);
+    const usage = incrementGooglePhotoUsage();
+    db.prepare('UPDATE places SET image_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND trip_id = ?').run(
+      cached.photoUrl,
+      placeId,
+      tripId,
+    );
+    return { photoUrl: cached.photoUrl, attribution: cached.attribution, cached: false, usage };
+  } finally {
+    releasePhotoFetchSlot();
+  }
 }
 
 // ── Reverse geocoding ────────────────────────────────────────────────────────

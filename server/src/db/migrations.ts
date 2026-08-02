@@ -3701,6 +3701,14 @@ function runMigrations(db: Database.Database): void {
       `);
       db.exec('CREATE INDEX IF NOT EXISTS idx_hidden_regions_user ON hidden_regions (user_id);');
     },
+
+    // Optional Google Places Photos key, separate from the regular Maps/Places key.
+    // The MCP photo attachment tool uses only this key so admins can restrict it
+    // independently in Google Cloud and monitor its monthly usage.
+    () => {
+      const exists = db.prepare("SELECT 1 FROM pragma_table_info('users') WHERE name = 'google_photos_api_key'").get();
+      if (!exists) db.exec('ALTER TABLE users ADD COLUMN google_photos_api_key TEXT');
+    },
   ];
 
   if (currentVersion < migrations.length) {

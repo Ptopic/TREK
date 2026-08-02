@@ -23,6 +23,7 @@ import { verifyJwtAndLoadUser } from '../middleware/auth';
 import { User } from '../types';
 import { DEMO_EMAIL_PRIMARY, isDemoEmail } from './demo';
 import { avatarUrl } from './avatarUrl';
+import { getGooglePhotoUsage } from './mapsService';
 import { joinTripAsMember } from './tripMembership';
 import { isPasskeyConfigured } from './webauthnConfig';
 
@@ -101,6 +102,7 @@ export function stripUserForClient(user: User): Record<string, unknown> {
   const {
     password_hash: _p,
     maps_api_key: _m,
+    google_photos_api_key: _gp,
     openweather_api_key: _o,
     unsplash_api_key: _u,
     mfa_secret: _mf,
@@ -624,35 +626,36 @@ export function updateMapsKey(userId: number, maps_api_key: string | null | unde
 
 export function updateApiKeys(
   userId: number,
-  body: { maps_api_key?: string; openweather_api_key?: string; unsplash_api_key?: string }
+  body: { maps_api_key?: string; google_photos_api_key?: string; openweather_api_key?: string; unsplash_api_key?: string }
 ) {
-  const current = db.prepare('SELECT maps_api_key, openweather_api_key, unsplash_api_key FROM users WHERE id = ?').get(userId) as Pick<User, 'maps_api_key' | 'openweather_api_key' | 'unsplash_api_key'> | undefined;
+  const current = db.prepare('SELECT maps_api_key, google_photos_api_key, openweather_api_key, unsplash_api_key FROM users WHERE id = ?').get(userId) as Pick<User, 'maps_api_key' | 'google_photos_api_key' | 'openweather_api_key' | 'unsplash_api_key'> | undefined;
 
   db.prepare(
-    'UPDATE users SET maps_api_key = ?, openweather_api_key = ?, unsplash_api_key = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+    'UPDATE users SET maps_api_key = ?, google_photos_api_key = ?, openweather_api_key = ?, unsplash_api_key = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
   ).run(
     body.maps_api_key !== undefined ? maybe_encrypt_api_key(body.maps_api_key) : current!.maps_api_key,
+    body.google_photos_api_key !== undefined ? maybe_encrypt_api_key(body.google_photos_api_key) : current!.google_photos_api_key,
     body.openweather_api_key !== undefined ? maybe_encrypt_api_key(body.openweather_api_key) : current!.openweather_api_key,
     body.unsplash_api_key !== undefined ? maybe_encrypt_api_key(body.unsplash_api_key) : current!.unsplash_api_key,
     userId
   );
 
   const updated = db.prepare(
-    'SELECT id, username, email, role, maps_api_key, openweather_api_key, unsplash_api_key, avatar, mfa_enabled FROM users WHERE id = ?'
-  ).get(userId) as Pick<User, 'id' | 'username' | 'email' | 'role' | 'maps_api_key' | 'openweather_api_key' | 'unsplash_api_key' | 'avatar' | 'mfa_enabled'> | undefined;
+    'SELECT id, username, email, role, maps_api_key, google_photos_api_key, openweather_api_key, unsplash_api_key, avatar, mfa_enabled FROM users WHERE id = ?'
+  ).get(userId) as Pick<User, 'id' | 'username' | 'email' | 'role' | 'maps_api_key' | 'google_photos_api_key' | 'openweather_api_key' | 'unsplash_api_key' | 'avatar' | 'mfa_enabled'> | undefined;
 
   const u = updated ? { ...updated, mfa_enabled: !!(updated.mfa_enabled === 1 || updated.mfa_enabled === true) } : undefined;
   return {
     success: true,
-    user: { ...u, maps_api_key: mask_stored_api_key(u?.maps_api_key), openweather_api_key: mask_stored_api_key(u?.openweather_api_key), unsplash_api_key: mask_stored_api_key(u?.unsplash_api_key), avatar_url: avatarUrl(updated || {}) },
+    user: { ...u, maps_api_key: mask_stored_api_key(u?.maps_api_key), google_photos_api_key: mask_stored_api_key(u?.google_photos_api_key), openweather_api_key: mask_stored_api_key(u?.openweather_api_key), unsplash_api_key: mask_stored_api_key(u?.unsplash_api_key), avatar_url: avatarUrl(updated || {}) },
   };
 }
 
 export function updateSettings(
   userId: number,
-  body: { maps_api_key?: string; openweather_api_key?: string; unsplash_api_key?: string; username?: string; email?: string }
+  body: { maps_api_key?: string; google_photos_api_key?: string; openweather_api_key?: string; unsplash_api_key?: string; username?: string; email?: string }
 ): { error?: string; status?: number; success?: boolean; user?: Record<string, unknown> } {
-  const { maps_api_key, openweather_api_key, unsplash_api_key, username, email } = body;
+  const { maps_api_key, google_photos_api_key, openweather_api_key, unsplash_api_key, username, email } = body;
 
   if (username !== undefined) {
     const trimmed = username.trim();
@@ -679,6 +682,7 @@ export function updateSettings(
   const params: (string | number | null)[] = [];
 
   if (maps_api_key !== undefined) { updates.push('maps_api_key = ?'); params.push(maybe_encrypt_api_key(maps_api_key)); }
+  if (google_photos_api_key !== undefined) { updates.push('google_photos_api_key = ?'); params.push(maybe_encrypt_api_key(google_photos_api_key)); }
   if (openweather_api_key !== undefined) { updates.push('openweather_api_key = ?'); params.push(maybe_encrypt_api_key(openweather_api_key)); }
   if (unsplash_api_key !== undefined) { updates.push('unsplash_api_key = ?'); params.push(maybe_encrypt_api_key(unsplash_api_key)); }
   if (username !== undefined) { updates.push('username = ?'); params.push(username.trim()); }
@@ -691,27 +695,29 @@ export function updateSettings(
   }
 
   const updated = db.prepare(
-    'SELECT id, username, email, role, maps_api_key, openweather_api_key, unsplash_api_key, avatar, mfa_enabled FROM users WHERE id = ?'
-  ).get(userId) as Pick<User, 'id' | 'username' | 'email' | 'role' | 'maps_api_key' | 'openweather_api_key' | 'unsplash_api_key' | 'avatar' | 'mfa_enabled'> | undefined;
+    'SELECT id, username, email, role, maps_api_key, google_photos_api_key, openweather_api_key, unsplash_api_key, avatar, mfa_enabled FROM users WHERE id = ?'
+  ).get(userId) as Pick<User, 'id' | 'username' | 'email' | 'role' | 'maps_api_key' | 'google_photos_api_key' | 'openweather_api_key' | 'unsplash_api_key' | 'avatar' | 'mfa_enabled'> | undefined;
 
   const u = updated ? { ...updated, mfa_enabled: !!(updated.mfa_enabled === 1 || updated.mfa_enabled === true) } : undefined;
   return {
     success: true,
-    user: { ...u, maps_api_key: mask_stored_api_key(u?.maps_api_key), openweather_api_key: mask_stored_api_key(u?.openweather_api_key), unsplash_api_key: mask_stored_api_key(u?.unsplash_api_key), avatar_url: avatarUrl(updated || {}) },
+    user: { ...u, maps_api_key: mask_stored_api_key(u?.maps_api_key), google_photos_api_key: mask_stored_api_key(u?.google_photos_api_key), openweather_api_key: mask_stored_api_key(u?.openweather_api_key), unsplash_api_key: mask_stored_api_key(u?.unsplash_api_key), avatar_url: avatarUrl(updated || {}) },
   };
 }
 
 export function getSettings(userId: number): { error?: string; status?: number; settings?: Record<string, unknown> } {
   const user = db.prepare(
-    'SELECT role, maps_api_key, openweather_api_key, unsplash_api_key FROM users WHERE id = ?'
-  ).get(userId) as Pick<User, 'role' | 'maps_api_key' | 'openweather_api_key' | 'unsplash_api_key'> | undefined;
+    'SELECT role, maps_api_key, google_photos_api_key, openweather_api_key, unsplash_api_key FROM users WHERE id = ?'
+  ).get(userId) as Pick<User, 'role' | 'maps_api_key' | 'google_photos_api_key' | 'openweather_api_key' | 'unsplash_api_key'> | undefined;
   if (user?.role !== 'admin') return { error: 'Admin access required', status: 403 };
 
   return {
     settings: {
       maps_api_key: decrypt_api_key(user.maps_api_key),
+      google_photos_api_key: decrypt_api_key(user.google_photos_api_key),
       openweather_api_key: decrypt_api_key(user.openweather_api_key),
       unsplash_api_key: decrypt_api_key(user.unsplash_api_key),
+      google_photos_usage: getGooglePhotoUsage(),
     },
   };
 }
