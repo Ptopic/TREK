@@ -1187,7 +1187,7 @@ function PlaceImageViewer({
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 2000,
+        zIndex: 99990,
         background: 'rgba(4,7,12,0.96)',
         display: 'flex',
         flexDirection: 'column',
