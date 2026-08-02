@@ -73,6 +73,16 @@ interface GooglePlaceDetails extends GooglePlaceResult {
   photos?: { name: string; authorAttributions?: { displayName?: string }[] }[];
 }
 
+interface PhotoAttachPlaceRow {
+  id: number;
+  google_place_id: string | null;
+  name: string | null;
+  address: string | null;
+  lat: number | null;
+  lng: number | null;
+  website: string | null;
+}
+
 // ── Constants ────────────────────────────────────────────────────────────────
 
 // Overpass, Nominatim and Wikimedia all ask that requests carry a User-Agent that
@@ -117,6 +127,21 @@ export function googleFtidFromMapsUrl(url?: string | null): string | null {
   try {
     const ftid = new URL(url).searchParams.get('ftid')?.trim();
     return ftid && GOOGLE_FTID_RE.test(ftid) ? ftid.toLowerCase() : null;
+  } catch {
+    return null;
+  }
+}
+
+function textQueryFromGoogleMapsUrl(url?: string | null): string | null {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    if (!/(^|\.)google\.[a-z.]+$/.test(host) && !/(^|\.)googleapis\.com$/.test(host)) return null;
+    if (!parsed.pathname.toLowerCase().includes('/maps')) return null;
+    const query = parsed.searchParams.get('query') || parsed.searchParams.get('q');
+    const text = query?.trim();
+    return text || null;
   } catch {
     return null;
   }
@@ -1178,17 +1203,87 @@ export async function getPlacePhoto(
   return { photoUrl: `/api/maps/place-photo/${encodeURIComponent(placeId)}/bytes`, attribution: result.attribution };
 }
 
+async function resolveGooglePlaceIdForPhotoAttach(
+  userId: number,
+  tripId: number,
+  place: PhotoAttachPlaceRow,
+): Promise<string | null> {
+  const apiKey = getGooglePhotosKey(userId);
+  if (!apiKey) throw Object.assign(new Error('Google Places Photos API key not configured'), { status: 400 });
+
+  const urlQuery = textQueryFromGoogleMapsUrl(place.website);
+  const fallbackQuery = [place.name, place.address].filter(Boolean).join(', ').trim();
+  const textQuery = (urlQuery || fallbackQuery).trim();
+  if (!textQuery) return null;
+
+  const body: Record<string, unknown> = {
+    textQuery,
+    pageSize: 1,
+  };
+  if (Number.isFinite(place.lat) && Number.isFinite(place.lng)) {
+    body.locationBias = {
+      circle: {
+        center: { latitude: place.lat, longitude: place.lng },
+        radius: 500,
+      },
+    };
+  }
+
+  const response = await googleFetch(
+    'https://places.googleapis.com/v1/places:searchText',
+    `resolveGooglePlaceIdForPhotoAttach(${place.id})`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': apiKey,
+        // Keep this request on the Text Search Essentials ID Only SKU.
+        // Do not add displayName, formattedAddress, location, photos, rating, or links here.
+        'X-Goog-FieldMask': 'places.id',
+      },
+      body: JSON.stringify(body),
+    },
+  );
+  const raw = await response.text();
+  if (!response.ok) {
+    throw Object.assign(new Error(raw.slice(0, 200) || 'Google Places ID lookup error'), { status: response.status });
+  }
+
+  let data: { places?: Array<{ id?: string }> };
+  try {
+    data = raw ? JSON.parse(raw) : {};
+  } catch {
+    throw Object.assign(new Error('Invalid Google Places ID lookup response'), { status: 502 });
+  }
+
+  const googlePlaceId = data.places?.[0]?.id?.trim() || null;
+  if (!googlePlaceId) return null;
+  db.prepare('UPDATE places SET google_place_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND trip_id = ?').run(
+    googlePlaceId,
+    place.id,
+    tripId,
+  );
+  return googlePlaceId;
+}
+
 export async function attachFirstGooglePlacePhoto(
   userId: number,
   tripId: number,
   placeId: number,
 ): Promise<{ photoUrl: string; attribution: string | null; cached: boolean; usage: { month: string; count: number } }> {
   const place = db
-    .prepare('SELECT id, google_place_id FROM places WHERE id = ? AND trip_id = ?')
-    .get(placeId, tripId) as { id: number; google_place_id: string | null } | undefined;
+    .prepare('SELECT id, google_place_id, name, address, lat, lng, website FROM places WHERE id = ? AND trip_id = ?')
+    .get(placeId, tripId) as PhotoAttachPlaceRow | undefined;
   if (!place) throw Object.assign(new Error('Place not found'), { status: 404 });
-  const googlePlaceId = (place.google_place_id || '').trim();
-  if (!googlePlaceId) throw Object.assign(new Error('Place has no google_place_id'), { status: 400 });
+  let googlePlaceId = (place.google_place_id || '').trim();
+  if (!googlePlaceId) {
+    googlePlaceId = await resolveGooglePlaceIdForPhotoAttach(userId, tripId, place);
+  }
+  if (!googlePlaceId) {
+    throw Object.assign(new Error('Place has no google_place_id and the saved Google Maps URL could not be resolved'), {
+      status: 400,
+    });
+  }
   if (/^https?:\/\//i.test(googlePlaceId) || googlePlaceId.startsWith('coords:')) {
     throw Object.assign(new Error('Place does not have a Google Place ID'), { status: 400 });
   }

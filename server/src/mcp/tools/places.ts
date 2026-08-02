@@ -125,7 +125,7 @@ export function registerPlaceTools(server: McpServer, userId: number, scopes: st
         osm_id: z.string().optional().describe('OpenStreetMap ID (e.g. "way:12345")'),
         google_place_id: z.string().optional().describe('Google Place ID (e.g. "ChIJd8BlQ2BZwokRAFUEcm_qrcA")'),
         google_ftid: z.string().optional().describe('Google Maps feature ID (e.g. "0x89c259b7abdd4769:0x103aaf1c8bf8a050")'),
-        attach_google_photo: z.boolean().optional().describe('Fetch and attach exactly one Google Places photo using the separate Google Photos API key. Requires google_place_id on the place. Does not fall back to Wikimedia.'),
+        attach_google_photo: z.boolean().optional().describe('Fetch and attach exactly one Google Places photo using the separate Google Photos API key. If google_place_id is missing, first resolves only places.id from the saved Google Maps search URL or place name/address. Does not fall back to Wikimedia.'),
       },
       annotations: TOOL_ANNOTATIONS_WRITE,
     },
