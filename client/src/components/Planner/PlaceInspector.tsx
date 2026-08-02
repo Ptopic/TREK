@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { avatarSrc } from '../../utils/avatarSrc'
 import { openFile } from '../../utils/fileDownload'
 import Markdown from 'react-markdown'
@@ -1177,7 +1178,7 @@ function PlaceImageViewer({
 
   if (!image) return null
 
-  return (
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -1187,22 +1188,42 @@ function PlaceImageViewer({
         position: 'fixed',
         inset: 0,
         zIndex: 2000,
-        background: 'rgba(0,0,0,0.92)',
+        background: 'rgba(4,7,12,0.96)',
         display: 'flex',
         flexDirection: 'column',
-        paddingBottom: 'var(--bottom-nav-h)',
+        padding: 'env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '10px 16px', flexShrink: 0 }} onClick={e => e.stopPropagation()}>
-        <span style={{ color: 'rgba(255,255,255,0.78)', fontSize: 'calc(12px * var(--fs-scale-body, 1))', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {image.title}{images.length > 1 ? ` ${index + 1}/${images.length}` : ''}
-        </span>
+      <div
+        style={{
+          position: 'absolute',
+          top: 'calc(env(safe-area-inset-top) + 10px)',
+          left: 'calc(env(safe-area-inset-left) + 12px)',
+          right: 'calc(env(safe-area-inset-right) + 12px)',
+          zIndex: 2,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div style={{ minWidth: 0 }}>
+          <div style={{ color: 'rgba(255,255,255,0.92)', fontSize: 'calc(13px * var(--fs-scale-body, 1))', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {image.title}
+          </div>
+          {images.length > 1 && (
+            <div style={{ color: 'rgba(255,255,255,0.52)', fontSize: 'calc(11px * var(--fs-scale-caption, 1))', marginTop: 2 }}>
+              {index + 1} / {images.length}
+            </div>
+          )}
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           {image.customImageId && (
             <button
               onClick={() => onDeleteCustomImage(image.customImageId!)}
               disabled={deletingImageId === image.customImageId}
-              style={{ background: 'rgba(239,68,68,0.16)', border: 'none', borderRadius: 8, cursor: 'pointer', color: '#fca5a5', display: 'flex', padding: 6, opacity: deletingImageId === image.customImageId ? 0.6 : 1 }}
+              style={{ width: 36, height: 36, background: 'rgba(239,68,68,0.18)', border: '1px solid rgba(248,113,113,0.22)', borderRadius: '50%', cursor: 'pointer', color: '#fca5a5', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: deletingImageId === image.customImageId ? 0.6 : 1 }}
               aria-label="Delete image"
             >
               <Trash2 size={16} />
@@ -1210,16 +1231,27 @@ function PlaceImageViewer({
           )}
           <button
             onClick={onClose}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.78)', display: 'flex', padding: 4 }}
+            style={{ width: 36, height: 36, background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '50%', cursor: 'pointer', color: 'rgba(255,255,255,0.88)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             aria-label="Close"
           >
             <X size={18} />
           </button>
         </div>
       </div>
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, position: 'relative' }} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '64px 0 24px',
+          position: 'relative',
+        }}
+        onClick={e => { if (e.target === e.currentTarget) onClose() }}
+      >
         {canGoPrev && (
-          <button onClick={(e) => { e.stopPropagation(); goPrev() }} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', width: 38, height: 38, borderRadius: '50%', border: 'none', background: 'rgba(255,255,255,0.12)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Previous image">
+          <button onClick={(e) => { e.stopPropagation(); goPrev() }} style={{ position: 'absolute', left: 'max(10px, env(safe-area-inset-left))', top: '50%', transform: 'translateY(-50%)', width: 42, height: 42, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(0,0,0,0.34)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 2 }} aria-label="Previous image">
             <ChevronLeft size={22} />
           </button>
         )}
@@ -1227,14 +1259,15 @@ function PlaceImageViewer({
           src={image.src}
           alt={image.title}
           onClick={e => e.stopPropagation()}
-          style={{ display: 'block', maxWidth: '94vw', maxHeight: '82vh', objectFit: 'contain', borderRadius: 8 }}
+          style={{ display: 'block', width: '100vw', height: '100%', maxWidth: '100vw', maxHeight: '100%', objectFit: 'contain' }}
         />
         {canGoNext && (
-          <button onClick={(e) => { e.stopPropagation(); goNext() }} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', width: 38, height: 38, borderRadius: '50%', border: 'none', background: 'rgba(255,255,255,0.12)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} aria-label="Next image">
+          <button onClick={(e) => { e.stopPropagation(); goNext() }} style={{ position: 'absolute', right: 'max(10px, env(safe-area-inset-right))', top: '50%', transform: 'translateY(-50%)', width: 42, height: 42, borderRadius: '50%', border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(0,0,0,0.34)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 2 }} aria-label="Next image">
             <ChevronRight size={22} />
           </button>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
