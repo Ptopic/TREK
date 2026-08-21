@@ -155,6 +155,19 @@ describe('createPlace (service)', () => {
     expect(place.tags[0].id).toBe(tag.id);
   });
 
+  it('PLACE-SVC-008b — persists a sanitized google_maps_url and rejects non-Google URLs', () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id);
+    const place = svcCreatePlace(String(trip.id), {
+      name: 'Palma Cathedral',
+      google_maps_url: ' https://www.google.com/maps/search/?api=1&query=Palma%20Cathedral ',
+    }) as any;
+    expect(place.google_maps_url).toBe('https://www.google.com/maps/search/?api=1&query=Palma%20Cathedral');
+
+    const bad = svcCreatePlace(String(trip.id), { name: 'Bad Link', google_maps_url: 'javascript:alert(1)' }) as any;
+    expect(bad.google_maps_url).toBeNull();
+  });
+
   it('PLACE-SVC-009 — place is associated with correct trip', () => {
     const { user } = createUser(testDb);
     const trip = createTrip(testDb, user.id);
@@ -202,6 +215,20 @@ describe('updatePlace', () => {
     expect(updated.name).toBe('New');
     expect(updated.lat).toBe(48.8);
     expect(updated.lng).toBe(2.3);
+  });
+
+  it('PLACE-SVC-013b — updates and clears google_maps_url', () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id);
+    const place = createPlace(testDb, trip.id, { name: 'Palma Cathedral' }) as any;
+
+    const updated = updatePlace(String(trip.id), String(place.id), {
+      google_maps_url: 'https://maps.app.goo.gl/example',
+    }) as any;
+    expect(updated.google_maps_url).toBe('https://maps.app.goo.gl/example');
+
+    const cleared = updatePlace(String(trip.id), String(place.id), { google_maps_url: null }) as any;
+    expect(cleared.google_maps_url).toBeNull();
   });
 
   it('PLACE-SVC-014 — returns null for non-existent place', () => {

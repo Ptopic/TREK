@@ -107,6 +107,24 @@ describe('Tool: create_place', () => {
     });
   });
 
+  it('accepts google_maps_url and persists it', async () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id);
+
+    await withHarness(user.id, async (h) => {
+      const result = await h.client.callTool({
+        name: 'create_place',
+        arguments: {
+          tripId: trip.id,
+          name: 'Palma Cathedral',
+          google_maps_url: 'https://www.google.com/maps/search/?api=1&query=Palma%20Cathedral',
+        },
+      });
+      const data = parseToolResult(result) as any;
+      expect(data.place.google_maps_url).toBe('https://www.google.com/maps/search/?api=1&query=Palma%20Cathedral');
+    });
+  });
+
   it('creates a place with minimal fields', async () => {
     const { user } = createUser(testDb);
     const trip = createTrip(testDb, user.id);
@@ -171,6 +189,25 @@ describe('Tool: update_place', () => {
       expect(data.place.name).toBe('New Name');
       // lat/lng preserved from original
       expect(data.place.lat).toBeCloseTo(place.lat ?? 48.8566);
+    });
+  });
+
+  it('updates google_maps_url', async () => {
+    const { user } = createUser(testDb);
+    const trip = createTrip(testDb, user.id);
+    const place = createPlace(testDb, trip.id, { name: 'Palma Cathedral' });
+
+    await withHarness(user.id, async (h) => {
+      const result = await h.client.callTool({
+        name: 'update_place',
+        arguments: {
+          tripId: trip.id,
+          placeId: place.id,
+          google_maps_url: 'https://maps.app.goo.gl/example',
+        },
+      });
+      const data = parseToolResult(result) as any;
+      expect(data.place.google_maps_url).toBe('https://maps.app.goo.gl/example');
     });
   });
 

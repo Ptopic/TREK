@@ -118,6 +118,7 @@ function usePlaceFormModal(props: PlaceFormModalProps) {
         notes: place.notes || '',
         transport_mode: place.transport_mode || 'walking',
         website: place.website || '',
+        google_maps_url: place.google_maps_url || '',
         image_url: place.image_url ?? null,
       })
     } else if (prefillCoords) {
@@ -800,6 +801,19 @@ export default function PlaceFormModal(props: PlaceFormModalProps) {
             className="form-input"
           />
         </div>
+
+        {place && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('places.formGoogleMaps')}</label>
+            <input
+              type="url"
+              value={form.google_maps_url || ''}
+              onChange={e => handleChange('google_maps_url', e.target.value)}
+              placeholder="https://www.google.com/maps/search/?api=1&query=..."
+              className="form-input"
+            />
+          </div>
+        )}
 
         {place && form.image_url && (
           <div className="border border-gray-200 rounded-xl p-3 space-y-2">

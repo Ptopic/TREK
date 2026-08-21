@@ -132,6 +132,7 @@ export function registerDayTools(server: McpServer, userId: number, scopes: stri
         category_id: z.number().int().positive().optional().describe('Category ID — use list_categories to see available options'),
         google_place_id: z.string().optional().describe('Google Place ID from search_place — enables opening hours display'),
         google_ftid: z.string().optional().describe('Google Maps feature ID from search_place — enables direct Google Maps links'),
+        google_maps_url: z.string().max(2000).optional().describe('Direct Google Maps search/place URL (non-API). Used as the top-priority Google Maps link for this place.'),
         osm_id: z.string().optional().describe('OpenStreetMap ID from search_place (e.g. "way:12345")'),
         place_notes: z.string().max(2000).optional().describe('Notes for the place'),
         website: z.string().max(500).optional(),
@@ -148,7 +149,7 @@ export function registerDayTools(server: McpServer, userId: number, scopes: stri
       },
       annotations: TOOL_ANNOTATIONS_NON_IDEMPOTENT,
     },
-    async ({ tripId, name, description, lat, lng, address, category_id, google_place_id, google_ftid, osm_id, place_notes, website, phone, start_day_id, end_day_id, check_in, check_in_end, check_out, confirmation, accommodation_notes, price, currency }) => {
+    async ({ tripId, name, description, lat, lng, address, category_id, google_place_id, google_ftid, google_maps_url, osm_id, place_notes, website, phone, start_day_id, end_day_id, check_in, check_in_end, check_out, confirmation, accommodation_notes, price, currency }) => {
       if (isDemoUser(userId)) return demoDenied();
       if (!canAccessTrip(tripId, userId)) return noAccess();
       if (!hasTripPermission('day_edit', tripId, userId)) return permissionDenied();
@@ -156,7 +157,7 @@ export function registerDayTools(server: McpServer, userId: number, scopes: stri
       if (dayErrors.length > 0) return { content: [{ type: 'text' as const, text: dayErrors.map(e => e.message).join(', ') }], isError: true };
       try {
         const run = db.transaction(() => {
-          const place = createPlace(String(tripId), { name, description, lat, lng, address, category_id, google_place_id, google_ftid, osm_id, notes: place_notes, website, phone, price, currency });
+          const place = createPlace(String(tripId), { name, description, lat, lng, address, category_id, google_place_id, google_ftid, google_maps_url, osm_id, notes: place_notes, website, phone, price, currency });
           const accommodation = createAccommodation(tripId, { place_id: place.id, start_day_id, end_day_id, check_in, check_in_end, check_out, confirmation, notes: accommodation_notes });
           return { place, accommodation };
         });

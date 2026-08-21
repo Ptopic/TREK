@@ -18,6 +18,7 @@ import * as placePhotoCache from './placePhotoCache';
 import { deleteImagesForPlaceSync } from './placeImageService';
 import { searchUnsplashPhotos, getUnsplashKey } from './unsplashService';
 import { type UpdateConflict, isUpdateConflict } from './conflictResult';
+import { normalizeGoogleMapsUrl } from '@trek/shared';
 
 // Reclaim a deleted place's cached marker photo if nothing else references it.
 // The cache key is the Google place_id, or — for coordinate-only places — the
@@ -121,27 +122,27 @@ export function createPlace(
     category_id?: number; price?: number; currency?: string;
     place_time?: string; end_time?: string;
     duration_minutes?: number; notes?: string; image_url?: string | null;
-    google_place_id?: string; google_ftid?: string; osm_id?: string; website?: string; phone?: string;
+    google_place_id?: string; google_ftid?: string; google_maps_url?: string | null; osm_id?: string; website?: string; phone?: string;
     transport_mode?: string; tags?: number[];
   },
 ) {
   const {
     name, description, lat, lng, address, category_id, price, currency,
     place_time, end_time,
-    duration_minutes, notes, image_url, google_place_id, google_ftid, osm_id, website, phone,
+    duration_minutes, notes, image_url, google_place_id, google_ftid, google_maps_url, osm_id, website, phone,
     transport_mode, tags = [],
   } = body;
 
   const result = db.prepare(`
     INSERT INTO places (trip_id, name, description, lat, lng, address, category_id, price, currency,
       place_time, end_time,
-      duration_minutes, notes, image_url, google_place_id, google_ftid, osm_id, website, phone, transport_mode)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      duration_minutes, notes, image_url, google_place_id, google_ftid, google_maps_url, osm_id, website, phone, transport_mode)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     tripId, name, description || null, lat || null, lng || null, address || null,
     category_id || null, price || null, currency || null,
     place_time || null, end_time || null, duration_minutes || 60, notes || null, image_url || null,
-    google_place_id || null, google_ftid || null, osm_id || null, website || null, phone || null, transport_mode || 'walking',
+    google_place_id || null, google_ftid || null, normalizeGoogleMapsUrl(google_maps_url), osm_id || null, website || null, phone || null, transport_mode || 'walking',
   );
 
   const placeId = result.lastInsertRowid;
@@ -178,7 +179,7 @@ export function updatePlace(
     category_id?: number; price?: number; currency?: string;
     place_time?: string; end_time?: string;
     duration_minutes?: number; notes?: string; image_url?: string | null;
-    google_place_id?: string; google_ftid?: string; osm_id?: string; website?: string; phone?: string;
+    google_place_id?: string; google_ftid?: string; google_maps_url?: string | null; osm_id?: string; website?: string; phone?: string;
     transport_mode?: string; tags?: number[];
   },
   ifMatch?: string,
@@ -196,7 +197,7 @@ export function updatePlace(
   const {
     name, description, lat, lng, address, category_id, price, currency,
     place_time, end_time,
-    duration_minutes, notes, image_url, google_place_id, google_ftid, osm_id, website, phone,
+    duration_minutes, notes, image_url, google_place_id, google_ftid, google_maps_url, osm_id, website, phone,
     transport_mode, tags,
   } = body;
 
@@ -217,6 +218,7 @@ export function updatePlace(
       image_url = ?,
       google_place_id = ?,
       google_ftid = ?,
+      google_maps_url = ?,
       osm_id = ?,
       website = ?,
       phone = ?,
@@ -239,6 +241,7 @@ export function updatePlace(
     image_url !== undefined ? image_url : existingPlace.image_url,
     google_place_id !== undefined ? google_place_id : existingPlace.google_place_id,
     google_ftid !== undefined ? google_ftid : existingPlace.google_ftid,
+    google_maps_url !== undefined ? normalizeGoogleMapsUrl(google_maps_url) : existingPlace.google_maps_url,
     osm_id !== undefined ? osm_id : existingPlace.osm_id,
     website !== undefined ? website : existingPlace.website,
     phone !== undefined ? phone : existingPlace.phone,

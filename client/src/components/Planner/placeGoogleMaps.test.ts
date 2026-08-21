@@ -1,9 +1,28 @@
 import { describe, it, expect } from 'vitest'
 import { getGoogleMapsUrlForPlace } from './placeGoogleMaps'
 
-const base = { name: 'Eiffel Tower', lat: 48.8584, lng: 2.2945, google_place_id: null, google_ftid: null } as any
+const base = { name: 'Eiffel Tower', lat: 48.8584, lng: 2.2945, google_place_id: null, google_ftid: null, google_maps_url: null } as any
 
 describe('getGoogleMapsUrlForPlace', () => {
+  it('FE-PLACE-GMAPS-000: uses a valid stored Google Maps URL before provider IDs', () => {
+    const url = getGoogleMapsUrlForPlace({
+      ...base,
+      google_maps_url: 'https://www.google.com/maps/search/?api=1&query=Palma%20Cathedral',
+      google_ftid: '0x47e66e2964e34e2d:0x8ddca9ee380ef7e0',
+      google_place_id: 'ChIJ123',
+    })
+    expect(url).toBe('https://www.google.com/maps/search/?api=1&query=Palma%20Cathedral')
+  })
+
+  it('FE-PLACE-GMAPS-000b: ignores a stored non-Google URL and falls through to provider IDs', () => {
+    const url = getGoogleMapsUrlForPlace({
+      ...base,
+      google_maps_url: 'https://evil.example/?q=Palma',
+      google_ftid: '0x47e66e2964e34e2d:0x8ddca9ee380ef7e0',
+    })
+    expect(url).toBe('https://www.google.com/maps/place/?q=Eiffel%20Tower&ftid=0x47e66e2964e34e2d:0x8ddca9ee380ef7e0')
+  })
+
   it('FE-PLACE-GMAPS-001: uses a valid ftid for a precise /place link', () => {
     const url = getGoogleMapsUrlForPlace({ ...base, google_ftid: '0x47e66e2964e34e2d:0x8ddca9ee380ef7e0' })
     expect(url).toBe('https://www.google.com/maps/place/?q=Eiffel%20Tower&ftid=0x47e66e2964e34e2d:0x8ddca9ee380ef7e0')

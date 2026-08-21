@@ -69,6 +69,7 @@ const places: TranslationStrings = {
   'places.endTimeBeforeStart': 'End time is before start time',
   'places.timeCollision': 'Time overlap with:',
   'places.formWebsite': 'Website',
+  'places.formGoogleMaps': 'Google Maps link',
   'places.formNotes': 'Notes',
   'places.formNotesPlaceholder': 'Personal notes...',
   'places.formReservation': 'Reservation',

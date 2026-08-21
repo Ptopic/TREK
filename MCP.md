@@ -277,8 +277,8 @@ Compound tools collapse common multi-step workflows into a single atomic call. E
 | Tool             | Description                                                                                      |
 |------------------|--------------------------------------------------------------------------------------------------|
 | `list_places`              | List places/POIs in a trip, optionally filtered by assignment status, category, tag, or search.  |
-| `create_place`             | Add a place/POI with name, coordinates, address, category, notes, website, phone, and optional `google_place_id` / `osm_id` for opening hours. |
-| `update_place`             | Update any field of an existing place including transport mode, timing, and price.               |
+| `create_place`             | Add a place/POI with name, coordinates, address, category, notes, website, phone, optional `google_place_id` / `osm_id`, and an optional direct `google_maps_url`. |
+| `update_place`             | Update any field of an existing place including transport mode, timing, price, and `google_maps_url`. |
 | `delete_place`             | Remove a place from a trip.                                                                      |
 | `bulk_delete_places`       | Delete multiple places at once by ID. Removes all day assignments as well. **Cannot be undone.** |
 | `import_places_from_url`   | Import all places from a publicly shared Google Maps or Naver Maps list URL.                     |

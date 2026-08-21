@@ -34,6 +34,7 @@ export function registerPlaceTools(server: McpServer, userId: number, scopes: st
         category_id: z.number().int().positive().optional().describe('Category ID — use list_categories to see available options'),
         google_place_id: z.string().optional().describe('Google Place ID from search_place — enables opening hours display'),
         google_ftid: z.string().optional().describe('Google Maps feature ID from search_place — enables direct Google Maps links'),
+        google_maps_url: z.string().max(2000).optional().describe('Direct Google Maps search/place URL (non-API). Used as the top-priority Google Maps link for this place.'),
         osm_id: z.string().optional().describe('OpenStreetMap ID from search_place (e.g. "way:12345") — enables opening hours if no Google ID'),
         notes: z.string().max(2000).optional(),
         website: z.string().max(500).optional(),
@@ -43,11 +44,11 @@ export function registerPlaceTools(server: McpServer, userId: number, scopes: st
       },
       annotations: TOOL_ANNOTATIONS_NON_IDEMPOTENT,
     },
-    async ({ tripId, name, description, lat, lng, address, category_id, google_place_id, google_ftid, osm_id, notes, website, phone, price, currency }) => {
+    async ({ tripId, name, description, lat, lng, address, category_id, google_place_id, google_ftid, google_maps_url, osm_id, notes, website, phone, price, currency }) => {
       if (isDemoUser(userId)) return demoDenied();
       if (!canAccessTrip(tripId, userId)) return noAccess();
       if (!hasTripPermission('place_edit', tripId, userId)) return permissionDenied();
-      const place = createPlace(String(tripId), { name, description, lat, lng, address, category_id, google_place_id, google_ftid, osm_id, notes, website, phone, price, currency });
+      const place = createPlace(String(tripId), { name, description, lat, lng, address, category_id, google_place_id, google_ftid, google_maps_url, osm_id, notes, website, phone, price, currency });
       safeBroadcast(tripId, 'place:created', { place });
       return ok({ place });
     }
@@ -68,6 +69,7 @@ export function registerPlaceTools(server: McpServer, userId: number, scopes: st
         category_id: z.number().int().positive().optional().describe('Category ID — use list_categories to see available options'),
         google_place_id: z.string().optional().describe('Google Place ID from search_place — enables opening hours display'),
         google_ftid: z.string().optional().describe('Google Maps feature ID from search_place — enables direct Google Maps links'),
+        google_maps_url: z.string().max(2000).optional().describe('Direct Google Maps search/place URL (non-API). Used as the top-priority Google Maps link for this place.'),
         osm_id: z.string().optional().describe('OpenStreetMap ID from search_place (e.g. "way:12345")'),
         place_notes: z.string().max(2000).optional().describe('Notes for the place'),
         website: z.string().max(500).optional(),
@@ -78,14 +80,14 @@ export function registerPlaceTools(server: McpServer, userId: number, scopes: st
       },
       annotations: TOOL_ANNOTATIONS_NON_IDEMPOTENT,
     },
-    async ({ tripId, dayId, name, description, lat, lng, address, category_id, google_place_id, google_ftid, osm_id, place_notes, website, phone, assignment_notes, price, currency }) => {
+    async ({ tripId, dayId, name, description, lat, lng, address, category_id, google_place_id, google_ftid, google_maps_url, osm_id, place_notes, website, phone, assignment_notes, price, currency }) => {
       if (isDemoUser(userId)) return demoDenied();
       if (!canAccessTrip(tripId, userId)) return noAccess();
       if (!hasTripPermission('place_edit', tripId, userId)) return permissionDenied();
       if (!dayExists(dayId, tripId)) return { content: [{ type: 'text' as const, text: 'Day not found.' }], isError: true };
       try {
         const run = db.transaction(() => {
-          const place = createPlace(String(tripId), { name, description, lat, lng, address, category_id, google_place_id, google_ftid, osm_id, notes: place_notes, website, phone, price, currency });
+          const place = createPlace(String(tripId), { name, description, lat, lng, address, category_id, google_place_id, google_ftid, google_maps_url, osm_id, notes: place_notes, website, phone, price, currency });
           const assignment = createAssignment(dayId, place.id, assignment_notes ?? null);
           return { place, assignment };
         });
@@ -125,16 +127,17 @@ export function registerPlaceTools(server: McpServer, userId: number, scopes: st
         osm_id: z.string().optional().describe('OpenStreetMap ID (e.g. "way:12345")'),
         google_place_id: z.string().optional().describe('Google Place ID (e.g. "ChIJd8BlQ2BZwokRAFUEcm_qrcA")'),
         google_ftid: z.string().optional().describe('Google Maps feature ID (e.g. "0x89c259b7abdd4769:0x103aaf1c8bf8a050")'),
+        google_maps_url: z.string().max(2000).optional().describe('Direct Google Maps search/place URL (non-API). Replaces the generated Google Maps link when set.'),
         attach_google_photo: z.boolean().optional().describe('Fetch and attach exactly one Google Places photo using the separate Google Photos API key. If google_place_id is missing, first resolves only places.id from the saved Google Maps search URL or place name/address. Does not fall back to Wikimedia.'),
         remove_image: z.boolean().optional().describe('Clear the current place cover image / Google photo URL. Custom uploaded place images are not affected.'),
       },
       annotations: TOOL_ANNOTATIONS_WRITE,
     },
-    async ({ tripId, placeId, name, description, lat, lng, address, category_id, price, currency, place_time, end_time, duration_minutes, notes, website, phone, transport_mode, osm_id, google_place_id, google_ftid, attach_google_photo, remove_image }) => {
+    async ({ tripId, placeId, name, description, lat, lng, address, category_id, price, currency, place_time, end_time, duration_minutes, notes, website, phone, transport_mode, osm_id, google_place_id, google_ftid, google_maps_url, attach_google_photo, remove_image }) => {
       if (isDemoUser(userId)) return demoDenied();
       if (!canAccessTrip(tripId, userId)) return noAccess();
       if (!hasTripPermission('place_edit', tripId, userId)) return permissionDenied();
-      const place = updatePlace(String(tripId), String(placeId), { name, description, lat, lng, address, category_id, price, currency, place_time, end_time, duration_minutes, notes, website, phone, transport_mode, osm_id, google_place_id, google_ftid, image_url: remove_image ? null : undefined });
+      const place = updatePlace(String(tripId), String(placeId), { name, description, lat, lng, address, category_id, price, currency, place_time, end_time, duration_minutes, notes, website, phone, transport_mode, osm_id, google_place_id, google_ftid, google_maps_url, image_url: remove_image ? null : undefined });
       if (!place) return { content: [{ type: 'text' as const, text: 'Place not found.' }], isError: true };
       let nextPlace = place;
       let googlePhoto: { photoUrl: string; attribution: string | null; cached: boolean; usage: { month: string; count: number } } | null = null;

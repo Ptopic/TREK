@@ -3709,6 +3709,15 @@ function runMigrations(db: Database.Database): void {
       const exists = db.prepare("SELECT 1 FROM pragma_table_info('users') WHERE name = 'google_photos_api_key'").get();
       if (!exists) db.exec('ALTER TABLE users ADD COLUMN google_photos_api_key TEXT');
     },
+    // Non-API Google Maps navigation/search URL, so places without a resolvable
+    // Place ID can still open the actual venue listing/search instead of a pin.
+    () => {
+      try {
+        db.exec('ALTER TABLE places ADD COLUMN google_maps_url TEXT');
+      } catch (err: any) {
+        if (!err.message?.includes('duplicate column name')) throw err;
+      }
+    },
   ];
 
   if (currentVersion < migrations.length) {

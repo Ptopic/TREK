@@ -39,7 +39,7 @@ import {
   resolvePlaceImagePath,
 } from '../../services/placeImageService';
 
-const STRING_LIMITS: Record<string, number> = { name: 200, description: 2000, address: 500, notes: 2000 };
+const STRING_LIMITS: Record<string, number> = { name: 200, description: 2000, address: 500, notes: 2000, google_maps_url: 2000 };
 const UPLOAD = { storage: memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } };
 const IMAGE_UPLOAD = {
   storage: diskStorage({
