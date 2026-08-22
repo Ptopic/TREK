@@ -1468,6 +1468,15 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
                         </>
                       )}
                     </div>
+                    {canEditDays && (
+                      <button
+                        type="button"
+                        onClick={e => openAddNote(day.id, e)}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 5, padding: '3px 6px', border: '1px solid var(--border-primary)', borderRadius: 5, background: 'var(--bg-secondary)', color: 'var(--text-muted)', fontSize: 'calc(10.5px * var(--fs-scale-caption, 1))', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                      >
+                        <Plus size={11} strokeWidth={2} /> {t('dayplan.addNote')}
+                      </button>
+                    )}
                     {(() => {
                       const hasAccs = accommodations.some(a => isDayInAccommodationRange(day, a.start_day_id, a.end_day_id, days))
                       const hasRentals = getActiveRentalsForDay(day.id).length > 0
