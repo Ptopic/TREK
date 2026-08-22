@@ -243,6 +243,31 @@ describe('downloadTripPDF', () => {
     expect(iframe!.srcdoc).toContain('Remember sunscreen')
   })
 
+  it('FE-COMP-TRIPPDF-012b: renders a day overview note separately from timeline notes', async () => {
+    await downloadTripPDF({
+      ...richArgs,
+      days: [{ ...dayWithPlaces, notes: 'Buy Acropolis tickets before leaving the hotel.' }],
+    })
+    const srcdoc = getIframe()!.srcdoc
+    expect(srcdoc).toContain('Buy Acropolis tickets before leaving the hotel.')
+    expect(srcdoc).toContain('class="day-overview-note"')
+  })
+
+  it('FE-COMP-TRIPPDF-012c: links each mapped place name to Google Maps', async () => {
+    await downloadTripPDF({
+      ...richArgs,
+      assignments: {
+        '10': [{
+          ...assignmentForDay,
+          place: { ...placeWithDetails, lat: 41.8902, lng: 12.4922 },
+        }],
+      } as any,
+    })
+    const srcdoc = getIframe()!.srcdoc
+    expect(srcdoc).toContain('class="place-name place-maps-link"')
+    expect(srcdoc).toContain('https://www.google.com/maps/search/?api=1&amp;query=41.8902,12.4922')
+  })
+
   it('FE-COMP-TRIPPDF-013: renders transport reservation cards', async () => {
     await downloadTripPDF(richArgs)
     const iframe = getIframe()

@@ -8,6 +8,7 @@ import { isDayInAccommodationRange, getDayOrder } from '../../utils/dayOrder'
 import { formatMoney, formatMoneySum, splitReservationDateTime, type MoneyEntry } from '../../utils/formatters'
 import { fetchExchangeRates } from '../../hooks/useExchangeRates'
 import { getFlightLegs, getTrainLegs } from '../../utils/flightLegs'
+import { getGoogleMapsUrlForPlace } from '../Planner/placeGoogleMaps'
 
 function renderLucideIcon(icon:LucideIcon, props = {}) {
   if (!_renderToStaticMarkup) return ''
@@ -321,6 +322,7 @@ export async function downloadTripPDF({ trip, days, places, assignments, categor
           if (!place) return ''
           const cat = categories.find(c => c.id === place.category_id)
           const color = cat?.color || '#6366f1'
+          const googleMapsUrl = getGoogleMapsUrlForPlace(place)
 
           // Image: direct > google photo > fallback icon. Both go through safeImg
           // so the proxy path is resolved to an absolute URL the PDF can load.
@@ -347,7 +349,9 @@ export async function downloadTripPDF({ trip, days, places, assignments, categor
               <div class="place-info">
                 <div class="place-name-row">
                   <span class="place-num">${pi}</span>
-                  <span class="place-name">${escHtml(place.name)}</span>
+                  ${googleMapsUrl
+                    ? `<a class="place-name place-maps-link" href="${escHtml(googleMapsUrl)}" target="_blank" rel="noopener noreferrer">${escHtml(place.name)}</a>`
+                    : `<span class="place-name">${escHtml(place.name)}</span>`}
                   ${cat ? `<span class="cat-badge" style="background:${color}">${escHtml(cat.name)}</span>` : ''}
                 </div>
                 ${place.address ? `<div class="info-row">${svgPin}<span class="info-text">${escHtml(place.address)}</span></div>` : ''}
@@ -396,6 +400,12 @@ export async function downloadTripPDF({ trip, days, places, assignments, categor
           <div class="day-accommodations ${accommodationsForDay.length === 1 ? 'single' : ''}">${accommodationDetails}</div>
         </div>`
       : ''
+    const dayOverviewNoteHtml = day.notes?.trim()
+      ? `<div class="day-overview-note">
+          <div class="day-overview-note-label">${escHtml(tr('dayplan.noteTitle'))}</div>
+          <div class="day-overview-note-text">${escHtml(day.notes)}</div>
+        </div>`
+      : ''
 
     // A real <table> so the browser repeats the <thead> day header at the top of
     // every page an overflowing day spills onto (#1471). CSS `table-header-group`
@@ -411,7 +421,7 @@ export async function downloadTripPDF({ trip, days, places, assignments, categor
           </div>
         </td></tr></thead>
         <tbody class="day-body-group"><tr><td>
-          <div class="day-body">${accommodationsHtml}${itemsHtml}</div>
+          <div class="day-body">${dayOverviewNoteHtml}${accommodationsHtml}${itemsHtml}</div>
         </td></tr></tbody>
       </table>`
   }).join('')
@@ -560,6 +570,8 @@ export async function downloadTripPDF({ trip, days, places, assignments, categor
     display: flex; align-items: center; justify-content: center; flex-shrink: 0;
   }
   .place-name { font-size: 11.5px; font-weight: 600; color: #1e293b; flex: 1; }
+  .place-maps-link { color: #03398f; text-decoration: underline; text-decoration-color: #93c5fd; text-underline-offset: 2px; }
+  .place-maps-link:visited { color: #03398f; }
   .cat-badge { font-size: 7.5px; font-weight: 600; color: #fff; border-radius: 99px; padding: 2px 7px; flex-shrink: 0; white-space: nowrap; }
 
   .info-row { display: flex; align-items: flex-start; gap: 4px; margin-bottom: 2px; padding-left: 21px; }
@@ -586,6 +598,15 @@ export async function downloadTripPDF({ trip, days, places, assignments, categor
   .note-body { flex: 1; min-width: 0; }
   .note-text { font-size: 9.5px; color: #334155; line-height: 1.55; }
   .note-time { font-size: 8px; color: #94a3b8; margin-top: 2px; }
+
+  /* ── Day overview note ────────────────────────── */
+  .day-overview-note {
+    border-left: 3px solid #03398f; background: #eff6ff;
+    padding: 8px 10px; margin-bottom: 9px; border-radius: 0 6px 6px 0;
+    page-break-inside: avoid;
+  }
+  .day-overview-note-label { font-size: 8px; font-weight: 700; color: #03398f; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
+  .day-overview-note-text { font-size: 9.5px; color: #1e3a5f; line-height: 1.55; white-space: pre-line; }
 
   .empty-day { font-size: 9.5px; color: #cbd5e1; font-style: italic; text-align: center; padding: 14px 0; }
 
