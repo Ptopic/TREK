@@ -827,7 +827,14 @@ export function MapViewGL({
     let raf: number | null = null
     const runReconcile = () => {
       raf = null
-      const features = map.querySourceFeatures(PLACE_CLUSTER_SOURCE_ID, { filter: ['!', ['has', 'point_count']] }) || []
+      const sourceFeatures = map.querySourceFeatures(PLACE_CLUSTER_SOURCE_ID) || []
+      // MapLibre can occasionally report no indexed source features even though
+      // the GeoJSON source has data. Never clear every pin in that state.
+      if (sourceFeatures.length === 0 && validPlaces.length > 0) {
+        reconcileMarkers(validPlaces)
+        return
+      }
+      const features = sourceFeatures.filter(feature => !feature?.properties?.point_count)
       const seen = new Set<number>()
       const visiblePlaces: PlaceWithCoords[] = []
       for (const feature of features) {

@@ -325,6 +325,22 @@ describe('MapViewGL', () => {
     expect(glMap.addLayer).toHaveBeenCalledWith(expect.objectContaining({ id: 'trip-place-clusters-count' }))
   })
 
+  it('FE-COMP-MAPVIEWGL-005b: falls back to HTML markers when MapLibre has not indexed cluster features', async () => {
+    const source = { setData: vi.fn() }
+    glMap.getSource.mockImplementation((id: string) => id === 'trip-place-clusters' ? source : null)
+    glMap.on.mockImplementation((event: string, handlerOrLayer: unknown) => {
+      if (event === 'load' && typeof handlerOrLayer === 'function') (handlerOrLayer as () => void)()
+      return glMap
+    })
+
+    render(<MapViewGL places={[buildMapPlace({ id: 91, lat: 48.8584, lng: 2.2945 })]} glProvider="maplibre-gl" />)
+    await act(async () => {})
+
+    expect(source.setData).toHaveBeenCalled()
+    const maplibre = (await import('maplibre-gl')).default
+    expect(maplibre.Marker).toHaveBeenCalledWith(expect.objectContaining({ element: expect.any(HTMLDivElement) }))
+  })
+
   function touchEvent(type: string, touches: Array<{ clientX: number; clientY: number }>) {
     const ev = new Event(type, { bubbles: true })
     Object.defineProperty(ev, 'touches', { value: touches })
