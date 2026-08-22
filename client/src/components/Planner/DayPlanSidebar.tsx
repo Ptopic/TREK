@@ -1541,7 +1541,7 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
                             <Plus size={14} strokeWidth={1.8} />
                           </button>
                         ) : <div style={{ borderBottom: div }} />}
-                        <button onClick={e => openAddNote(day.id, e)} aria-label={t('dayplan.addNote')} style={{ ...cell, border: 'none', borderRight: div }}>
+                        <button onClick={e => openAddNote(day.id, e)} aria-label={t('dayplan.addNote')} title={t('dayplan.addNote')} style={{ ...cell, border: 'none', borderRight: div }}>
                           <FileText size={14} strokeWidth={1.8} />
                         </button>
                         <button onClick={e => toggleDay(day.id, e)} title={isExpanded ? t('common.collapse') : t('common.expand')} style={{ ...cell, border: 'none' }}>
@@ -2310,6 +2310,15 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
                         </React.Fragment>
                       )
                     })
+                  )}
+                  {canEditDays && (
+                    <button
+                      type="button"
+                      onClick={e => openAddNote(day.id, e)}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, width: 'calc(100% - 16px)', margin: '5px 8px 7px', padding: '7px 10px', border: '1px dashed var(--border-primary)', borderRadius: 7, background: 'transparent', color: 'var(--text-muted)', fontSize: 'calc(11px * var(--fs-scale-caption, 1))', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                    >
+                      <FileText size={13} strokeWidth={1.8} /> {t('dayplan.addNote')}
+                    </button>
                   )}
                   {hotelLegs[day.id]?.bottom && (
                     <HotelRouteConnector seg={hotelLegs[day.id]!.bottom!.seg} name={hotelLegs[day.id]!.bottom!.name} profile={routeProfile} placement="bottom" />

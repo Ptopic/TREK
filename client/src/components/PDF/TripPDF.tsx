@@ -9,6 +9,7 @@ import { formatMoney, formatMoneySum, splitReservationDateTime, type MoneyEntry 
 import { fetchExchangeRates } from '../../hooks/useExchangeRates'
 import { getFlightLegs, getTrainLegs } from '../../utils/flightLegs'
 import { getGoogleMapsUrlForPlace } from '../Planner/placeGoogleMaps'
+import { downloadInteractiveTripPDF } from './InteractiveTripPDF'
 
 function renderLucideIcon(icon:LucideIcon, props = {}) {
   if (!_renderToStaticMarkup) return ''
@@ -689,6 +690,7 @@ ${pluginSectionsHtml}
   header.innerHTML = `
     <span style="font-size:13px;font-weight:600;color:var(--text-primary)">${escHtml(trip?.title || tr('pdf.travelPlan'))}</span>
     <div style="display:flex;align-items:center;gap:8px">
+      <button id="pdf-download-btn" style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:#fff;background:#03398f;border:none;cursor:pointer;padding:6px 10px;border-radius:6px;font-family:inherit">Download interactive PDF</button>
       <button id="pdf-print-btn" style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:500;color:var(--text-muted);background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:6px;font-family:inherit">${tr('pdf.saveAsPdf')}</button>
       <button id="pdf-close-btn" style="background:none;border:none;cursor:pointer;color:var(--text-faint);display:flex;padding:4px;border-radius:6px">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -700,7 +702,7 @@ ${pluginSectionsHtml}
   iframe.style.cssText = 'flex:1;width:100%;border:none;'
   // No script runs inside the document (print is parent-initiated), so withhold
   // allow-scripts to keep the sandbox tight.
-  iframe.sandbox = 'allow-same-origin allow-modals'
+  iframe.sandbox = 'allow-same-origin allow-modals allow-popups'
   iframe.srcdoc = html
 
   card.appendChild(header)
@@ -712,4 +714,15 @@ ${pluginSectionsHtml}
   if (closeBtn) closeBtn.onclick = () => overlay.remove()
   const printBtn = header.querySelector<HTMLElement>('#pdf-print-btn')
   if (printBtn) printBtn.onclick = () => { iframe.contentWindow?.print() }
+  const downloadBtn = header.querySelector<HTMLElement>('#pdf-download-btn')
+  if (downloadBtn) downloadBtn.onclick = async () => {
+    try {
+      downloadBtn.setAttribute('disabled', 'true')
+      downloadBtn.textContent = 'Preparing PDF...'
+      await downloadInteractiveTripPDF({ trip, days, assignments, categories, dayNotes, locale: _locale })
+    } finally {
+      downloadBtn.removeAttribute('disabled')
+      downloadBtn.textContent = 'Download interactive PDF'
+    }
+  }
 }
