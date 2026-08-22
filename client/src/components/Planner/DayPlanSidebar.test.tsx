@@ -149,6 +149,20 @@ beforeEach(() => {
 describe('DayPlanSidebar', () => {
   // ── Rendering ───────────────────────────────────────────────────────────
 
+  it('FE-PLANNER-DAYPLAN-000: exposes a handle-only reorder gesture on touch devices', () => {
+    const day = buildDay({ id: 10 })
+    const place = buildPlace({ id: 42, name: 'Touch Reorder Place' })
+    const assignment = buildAssignment({ id: 12, place_id: 42, place })
+
+    render(<DayPlanSidebar {...makeDefaultProps({
+      days: [day], places: [place], assignments: { '10': [assignment] }, isMobile: true, isTouch: true,
+    })} />)
+
+    const row = screen.getByText('Touch Reorder Place').closest('.dp-row')
+    expect(row).toHaveAttribute('draggable', 'false')
+    expect(screen.getByLabelText('Drag to reorder')).toHaveAttribute('draggable', 'true')
+  })
+
   it('FE-PLANNER-DAYPLAN-001: renders without crashing', () => {
     render(<DayPlanSidebar {...makeDefaultProps()} />)
     expect(document.body).toBeInTheDocument()

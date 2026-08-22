@@ -154,7 +154,8 @@ function useDayPlanSidebar(props: DayPlanSidebarProps) {
   isMobile = false,
   isTouch = false,
   } = props
-  const dragDisabled = isMobile || isTouch
+  // On touch devices only the dedicated grip is draggable. This preserves normal
+  // scrolling and prevents the map's gestures from being interpreted as a reorder.
   const toast = useToast()
   const { t, language, locale } = useTranslation()
   const ctxMenu = useContextMenu()
@@ -1048,7 +1049,7 @@ function useDayPlanSidebar(props: DayPlanSidebarProps) {
     onScrollTopChange,
     showRouteToolsWhenExpanded,
     isMobile,
-    dragDisabled,
+    isTouch,
     toast,
     t,
     language,
@@ -1219,7 +1220,7 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
     onScrollTopChange,
     showRouteToolsWhenExpanded,
     isMobile,
-    dragDisabled,
+    isTouch,
     toast,
     t,
     language,
@@ -1698,9 +1699,9 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
                           <React.Fragment key={`place-${assignment.id}`}>
                           <div
                             className="dp-row"
-                            draggable={canEditDays && !dragDisabled}
+                            draggable={canEditDays && !isMobile && !isTouch}
                             onDragStart={e => {
-                              if (!canEditDays || dragDisabled) { e.preventDefault(); return }
+                              if (!canEditDays) { e.preventDefault(); return }
                               e.dataTransfer.setData('assignmentId', String(assignment.id))
                               e.dataTransfer.setData('fromDayId', String(day.id))
                               e.dataTransfer.effectAllowed = 'move'
@@ -1795,7 +1796,7 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
                               opacity: isDraggingThis ? 0.4 : 1,
                             }}
                           >
-                            {canEditDays && !dragDisabled && <div className="dp-grip" style={{ flexShrink: 0, color: 'var(--text-faint)', display: 'flex', alignItems: 'center', opacity: 0.3, transition: 'opacity 0.15s', cursor: 'grab' }}>
+                            {canEditDays && <div className="dp-grip" draggable={isMobile || isTouch} aria-label="Drag to reorder" title="Drag to reorder" onClick={e => e.stopPropagation()} style={{ flexShrink: 0, color: 'var(--text-faint)', display: 'flex', alignItems: 'center', opacity: 0.3, transition: 'opacity 0.15s', cursor: 'grab', touchAction: 'none', padding: '7px 3px' }}>
                               <GripVertical size={13} strokeWidth={1.8} />
                             </div>}
                             <div
@@ -2055,9 +2056,9 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
                               const key = inBottom ? `transport-after-${res.id}${ls}-${day.id}` : `transport-${res.id}${ls}-${day.id}`
                               if (dropTargetRef.current !== key) setDropTargetKey(key)
                             }}
-                            draggable={canEditDays && spanPhase !== 'middle' && !res.__leg && !dragDisabled}
+                            draggable={canEditDays && spanPhase !== 'middle' && !res.__leg && !isMobile && !isTouch}
                             onDragStart={e => {
-                              if (!canEditDays || spanPhase === 'middle' || res.__leg || dragDisabled) { e.preventDefault(); return }
+                              if (!canEditDays || spanPhase === 'middle' || res.__leg) { e.preventDefault(); return }
                               // setData is required for the drag to start reliably (Firefox) and
                               // matches how place/note items initiate their drag.
                               e.dataTransfer.setData('reservationId', String(res.id))
@@ -2106,8 +2107,8 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
                               opacity: draggingId === res.id ? 0.4 : spanPhase === 'middle' ? 0.65 : 1,
                             }}
                           >
-                            {canEditDays && spanPhase !== 'middle' && !res.__leg && !dragDisabled && (
-                              <div className="dp-grip" style={{ flexShrink: 0, color: 'var(--text-faint)', display: 'flex', alignItems: 'center', opacity: 0.3, transition: 'opacity 0.15s', cursor: 'grab' }}>
+                            {canEditDays && spanPhase !== 'middle' && !res.__leg && (
+                              <div className="dp-grip" draggable={isMobile || isTouch} aria-label="Drag to reorder" title="Drag to reorder" onClick={e => e.stopPropagation()} style={{ flexShrink: 0, color: 'var(--text-faint)', display: 'flex', alignItems: 'center', opacity: 0.3, transition: 'opacity 0.15s', cursor: 'grab', touchAction: 'none', padding: '7px 3px' }}>
                                 <GripVertical size={13} strokeWidth={1.8} />
                               </div>
                             )}
@@ -2224,8 +2225,8 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
                         <React.Fragment key={`note-${note.id}`}>
                         <div
                           className="dp-row"
-                          draggable={canEditDays && !dragDisabled}
-                          onDragStart={e => { if (!canEditDays || dragDisabled) { e.preventDefault(); return } e.dataTransfer.setData('noteId', String(note.id)); e.dataTransfer.setData('fromDayId', String(day.id)); e.dataTransfer.effectAllowed = 'move'; dragDataRef.current = { noteId: String(note.id), fromDayId: String(day.id) }; setDraggingId(`note-${note.id}`) }}
+                          draggable={canEditDays && !isMobile && !isTouch}
+                          onDragStart={e => { if (!canEditDays) { e.preventDefault(); return } e.dataTransfer.setData('noteId', String(note.id)); e.dataTransfer.setData('fromDayId', String(day.id)); e.dataTransfer.effectAllowed = 'move'; dragDataRef.current = { noteId: String(note.id), fromDayId: String(day.id) }; setDraggingId(`note-${note.id}`) }}
                           onDragEnd={() => { setDraggingId(null); setDropTargetKey(null); dragDataRef.current = null }}
                           onDragOver={e => { e.preventDefault(); e.stopPropagation(); if (dropTargetKey !== `note-${note.id}`) setDropTargetKey(`note-${note.id}`) }}
                           onDrop={e => {
@@ -2293,7 +2294,7 @@ const DayPlanSidebar = React.memo(function DayPlanSidebar(props: DayPlanSidebarP
                             transition: 'background 0.1s', cursor: 'grab', userSelect: 'none',
                           }}
                         >
-                          {canEditDays && !dragDisabled && <div className="dp-grip" style={{ flexShrink: 0, color: 'var(--text-faint)', display: 'flex', alignItems: 'center', opacity: 0.3, transition: 'opacity 0.15s', cursor: 'grab' }}>
+                          {canEditDays && <div className="dp-grip" draggable={isMobile || isTouch} aria-label="Drag to reorder" title="Drag to reorder" onClick={e => e.stopPropagation()} style={{ flexShrink: 0, color: 'var(--text-faint)', display: 'flex', alignItems: 'center', opacity: 0.3, transition: 'opacity 0.15s', cursor: 'grab', touchAction: 'none', padding: '7px 3px' }}>
                             <GripVertical size={13} strokeWidth={1.8} />
                           </div>}
                           <div style={{ width: 28, height: 28, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', background: 'var(--bg-hover)', overflow: 'hidden' }}>

@@ -165,6 +165,19 @@ html.dark .bg-slate-50\/60, html.dark [class*="bg-slate-50/"] { background-color
   pointer-events: auto;
 }
 @media (max-width: 767px), (pointer: coarse) {
+  /* Reordering on touch starts only from this explicit grip. The larger target
+     avoids hijacking the vertical scroll gesture from the rest of the row. */
+  .dp-grip {
+    opacity: 0.7 !important;
+    min-width: 24px;
+    min-height: 32px;
+    justify-content: center;
+    cursor: grab;
+  }
+  .dp-grip:active {
+    cursor: grabbing;
+    opacity: 1 !important;
+  }
   .reorder-buttons {
     flex-direction: row !important;
     opacity: 1 !important;

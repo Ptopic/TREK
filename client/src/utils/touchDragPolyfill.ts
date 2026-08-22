@@ -6,14 +6,12 @@
  * dblclick fires the default double-click-zoom, so two quick one-finger pans zoomed
  * instead of panning (#1440).
  *
- * Reorder DnD is disabled wherever the primary pointer is coarse (#1432), so the only
- * device class left with a job for the polyfill is the hybrid laptop: a mouse as the
- * primary pointer, with a touchscreen also available. Loading it anywhere else — notably
- * on tablets, which a width check misclassifies as desktop — re-arms the very gesture
- * hijack #1432 removed, and drags the #1440 phantom-dblclick along with it.
+ * On phones and tablets, only explicit planner drag handles are draggable. That keeps
+ * regular rows and map gestures out of the polyfill while making reorder available on
+ * touch devices again.
  */
 export function maybeInstallTouchDragPolyfill(): Promise<unknown> | void {
   if (typeof window === 'undefined') return
-  if (!window.matchMedia('(pointer: fine) and (any-pointer: coarse)').matches) return
+  if (!window.matchMedia('(any-pointer: coarse)').matches) return
   return import('drag-drop-touch')
 }
