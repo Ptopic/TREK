@@ -38,9 +38,10 @@ const styles = StyleSheet.create({
   address: { color: '#64748b', fontSize: 8.5, marginTop: 4, marginLeft: 24, lineHeight: 1.3 },
   description: { color: '#64748b', fontSize: 8, marginTop: 3, marginLeft: 24, lineHeight: 1.3 },
   mapLink: { color: '#2563eb', fontFamily: 'Helvetica-Bold', fontSize: 8, marginTop: 4, marginLeft: 24, textDecoration: 'underline' },
-  note: { flexDirection: 'row', backgroundColor: '#f1f5f9', borderColor: '#e2e8f0', borderWidth: 1, borderRadius: 7, marginBottom: 7, padding: 9 },
-  noteBar: { width: 3, backgroundColor: '#94a3b8', borderRadius: 2, marginRight: 8 },
-  noteText: { flex: 1, color: '#475569', fontSize: 9, lineHeight: 1.4 },
+  note: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: '#f1f5f9', borderColor: '#e2e8f0', borderWidth: 1, borderRadius: 7, marginBottom: 7, padding: 9 },
+  noteBar: { alignSelf: 'stretch', width: 3, backgroundColor: '#94a3b8', borderRadius: 2, marginRight: 8 },
+  noteContent: { flex: 1, minWidth: 0 },
+  noteText: { color: '#475569', fontSize: 9, lineHeight: 1.4 },
   noteTime: { color: '#94a3b8', fontSize: 8, marginTop: 3 },
   empty: { color: '#94a3b8', fontSize: 10, textAlign: 'center', marginTop: 30 },
 })
@@ -80,7 +81,7 @@ function LinkedTripDocument({ trip, days, assignments, categories, dayNotes, loc
         {items.length === 0 ? <Text style={styles.empty}>No places planned for this day.</Text> : items.map((item, index) => {
           if (item.type === 'note') {
             const note = item.value
-            return <View key={`note-${note.id}-${index}`} style={styles.note} wrap={false}><View style={styles.noteBar} /><View><Text style={styles.noteText}>{note.text}</Text>{note.time ? <Text style={styles.noteTime}>{note.time}</Text> : null}</View></View>
+            return <View key={`note-${note.id}-${index}`} style={styles.note} wrap={false}><View style={styles.noteBar} /><View style={styles.noteContent}><Text style={styles.noteText}>{note.text}</Text>{note.time?.trim() ? <Text style={styles.noteTime}>{note.time}</Text> : null}</View></View>
           }
           const place = item.value as Place | undefined
           if (!place) return null
