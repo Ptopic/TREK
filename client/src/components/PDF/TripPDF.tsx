@@ -9,7 +9,6 @@ import { formatMoney, formatMoneySum, splitReservationDateTime, type MoneyEntry 
 import { fetchExchangeRates } from '../../hooks/useExchangeRates'
 import { getFlightLegs, getTrainLegs } from '../../utils/flightLegs'
 import { getGoogleMapsUrlForPlace } from '../Planner/placeGoogleMaps'
-import { downloadInteractiveTripPDF } from './InteractiveTripPDF'
 
 function renderLucideIcon(icon:LucideIcon, props = {}) {
   if (!_renderToStaticMarkup) return ''
@@ -40,6 +39,7 @@ function accommodationIconSvg(type) {
 
 // ── SVG inline icons (for chips) ─────────────────────────────────────────────
 const svgPin   = `<svg width="11" height="11" viewBox="0 0 24 24" fill="#94a3b8" style="flex-shrink:0;margin-top:1px"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5" fill="white"/></svg>`
+const svgExternalLink = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3h7v7"/><path d="M10 14 21 3"/><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/></svg>`
 const svgClock = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>`
 const svgClock2= `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>`
 const svgCheck = `<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L19 7"/></svg>`
@@ -350,14 +350,13 @@ export async function downloadTripPDF({ trip, days, places, assignments, categor
               <div class="place-info">
                 <div class="place-name-row">
                   <span class="place-num">${pi}</span>
-                  ${googleMapsUrl
-                    ? `<a class="place-name place-maps-link" href="${escHtml(googleMapsUrl)}" target="_blank" rel="noopener noreferrer">${escHtml(place.name)}</a>`
-                    : `<span class="place-name">${escHtml(place.name)}</span>`}
+                  <span class="place-name">${escHtml(place.name)}</span>
                   ${cat ? `<span class="cat-badge" style="background:${color}">${escHtml(cat.name)}</span>` : ''}
                 </div>
                 ${place.address ? `<div class="info-row">${svgPin}<span class="info-text">${escHtml(place.address)}</span></div>` : ''}
                 ${(place.lat != null && place.lng != null) ? `<div class="info-row"><span class="info-spacer"></span><span class="info-text muted">${Number(place.lat).toFixed(5)}, ${Number(place.lng).toFixed(5)}</span></div>` : ''}
                 ${place.description ? `<div class="info-row"><span class="info-spacer"></span><span class="info-text muted italic">${escHtml(place.description)}</span></div>` : ''}
+                ${googleMapsUrl ? `<a class="maps-action" href="${escHtml(googleMapsUrl)}" target="_blank" rel="noopener noreferrer">${svgExternalLink}<span>Open in Google Maps</span></a>` : ''}
                 ${chips ? `<div class="chips">${chips}</div>` : ''}
                 ${place.notes ? `<div class="info-row"><span class="info-spacer"></span><span class="info-text muted italic">${escHtml(place.notes)}</span></div>` : ''}
               </div>
@@ -571,8 +570,11 @@ export async function downloadTripPDF({ trip, days, places, assignments, categor
     display: flex; align-items: center; justify-content: center; flex-shrink: 0;
   }
   .place-name { font-size: 11.5px; font-weight: 600; color: #1e293b; flex: 1; }
-  .place-maps-link { color: #03398f; text-decoration: underline; text-decoration-color: #93c5fd; text-underline-offset: 2px; }
-  .place-maps-link:visited { color: #03398f; }
+  .maps-action {
+    display: inline-flex; align-items: center; gap: 4px; margin: 3px 0 2px 21px;
+    color: #2563eb; font-size: 8.5px; font-weight: 600; text-decoration: none;
+  }
+  .maps-action:hover, .maps-action:focus { color: #1d4ed8; text-decoration: underline; }
   .cat-badge { font-size: 7.5px; font-weight: 600; color: #fff; border-radius: 99px; padding: 2px 7px; flex-shrink: 0; white-space: nowrap; }
 
   .info-row { display: flex; align-items: flex-start; gap: 4px; margin-bottom: 2px; padding-left: 21px; }
@@ -690,7 +692,6 @@ ${pluginSectionsHtml}
   header.innerHTML = `
     <span style="font-size:13px;font-weight:600;color:var(--text-primary)">${escHtml(trip?.title || tr('pdf.travelPlan'))}</span>
     <div style="display:flex;align-items:center;gap:8px">
-      <button id="pdf-download-btn" style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:#fff;background:#03398f;border:none;cursor:pointer;padding:6px 10px;border-radius:6px;font-family:inherit">Download interactive PDF</button>
       <button id="pdf-print-btn" style="display:flex;align-items:center;gap:5px;font-size:12px;font-weight:500;color:var(--text-muted);background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:6px;font-family:inherit">${tr('pdf.saveAsPdf')}</button>
       <button id="pdf-close-btn" style="background:none;border:none;cursor:pointer;color:var(--text-faint);display:flex;padding:4px;border-radius:6px">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -714,15 +715,4 @@ ${pluginSectionsHtml}
   if (closeBtn) closeBtn.onclick = () => overlay.remove()
   const printBtn = header.querySelector<HTMLElement>('#pdf-print-btn')
   if (printBtn) printBtn.onclick = () => { iframe.contentWindow?.print() }
-  const downloadBtn = header.querySelector<HTMLElement>('#pdf-download-btn')
-  if (downloadBtn) downloadBtn.onclick = async () => {
-    try {
-      downloadBtn.setAttribute('disabled', 'true')
-      downloadBtn.textContent = 'Preparing PDF...'
-      await downloadInteractiveTripPDF({ trip, days, assignments, categories, dayNotes, locale: _locale })
-    } finally {
-      downloadBtn.removeAttribute('disabled')
-      downloadBtn.textContent = 'Download interactive PDF'
-    }
-  }
 }

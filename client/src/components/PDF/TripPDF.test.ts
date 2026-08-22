@@ -253,7 +253,7 @@ describe('downloadTripPDF', () => {
     expect(srcdoc).toContain('class="day-overview-note"')
   })
 
-  it('FE-COMP-TRIPPDF-012c: links each mapped place name to Google Maps', async () => {
+  it('FE-COMP-TRIPPDF-012c: renders an explicit Google Maps action for each mapped place', async () => {
     await downloadTripPDF({
       ...richArgs,
       assignments: {
@@ -264,7 +264,8 @@ describe('downloadTripPDF', () => {
       } as any,
     })
     const srcdoc = getIframe()!.srcdoc
-    expect(srcdoc).toContain('class="place-name place-maps-link"')
+    expect(srcdoc).toContain('class="maps-action"')
+    expect(srcdoc).toContain('Open in Google Maps')
     expect(srcdoc).toContain('https://www.google.com/maps/search/?api=1&amp;query=41.8902,12.4922')
   })
 
